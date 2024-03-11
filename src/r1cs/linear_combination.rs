@@ -1,12 +1,15 @@
 //! Definition of linear combinations.
 
-use curve25519_dalek::scalar::Scalar;
+use ark_ff::Field;
 use std::iter::FromIterator;
+use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
 
 /// Represents a variable in a constraint system.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Variable {
+pub enum Variable<F: Field> {
+    /// A Pedersen vector commitment
+    VectorCommit(usize, usize),
     /// Represents an external input specified by a commitment.
     Committed(usize),
     /// Represents the left input of a multiplication gate.
@@ -16,53 +19,67 @@ pub enum Variable {
     /// Represents the output of a multiplication gate.
     MultiplierOutput(usize),
     /// Represents the constant 1.
-    One(),
+    One(PhantomData<F>),
 }
 
-impl From<Variable> for LinearCombination {
-    fn from(v: Variable) -> LinearCombination {
+impl<F: Field> From<Variable<F>> for LinearCombination<F> {
+    fn from(v: Variable<F>) -> LinearCombination<F> {
         LinearCombination {
-            terms: vec![(v, Scalar::one())],
+            terms: vec![(v, F::one())],
         }
     }
 }
 
-impl<S: Into<Scalar>> From<S> for LinearCombination {
-    fn from(s: S) -> LinearCombination {
+// impl<F: Field, S: Into<F> + Marker> From<S> for LinearCombination<F> {
+//     fn from(s: S) -> LinearCombination<F> {
+//         LinearCombination {
+//             terms: vec![(Variable::One(), s.into())],
+//         }
+//     }
+// }
+
+impl<F: Field> From<F> for LinearCombination<F> {
+    fn from(c: F) -> LinearCombination<F> {
         LinearCombination {
-            terms: vec![(Variable::One(), s.into())],
+            terms: vec![(Variable::One(PhantomData), c)],
         }
+    }
+}
+
+pub fn constant<F: Field, I: Into<F>>(c: I) -> LinearCombination<F> {
+    LinearCombination {
+        terms: vec![(Variable::One(PhantomData), c.into())],
     }
 }
 
 // Arithmetic on variables produces linear combinations
 
-impl Neg for Variable {
-    type Output = LinearCombination;
+impl<F: Field> Neg for Variable<F> {
+    type Output = LinearCombination<F>;
 
     fn neg(self) -> Self::Output {
         -LinearCombination::from(self)
     }
 }
 
-impl<L: Into<LinearCombination>> Add<L> for Variable {
-    type Output = LinearCombination;
+impl<F: Field, L: Into<LinearCombination<F>>> Add<L> for Variable<F> {
+    type Output = LinearCombination<F>;
 
     fn add(self, other: L) -> Self::Output {
         LinearCombination::from(self) + other.into()
     }
 }
 
-impl<L: Into<LinearCombination>> Sub<L> for Variable {
-    type Output = LinearCombination;
+impl<F: Field, L: Into<LinearCombination<F>>> Sub<L> for Variable<F> {
+    type Output = LinearCombination<F>;
 
     fn sub(self, other: L) -> Self::Output {
         LinearCombination::from(self) - other.into()
     }
 }
 
-impl<S: Into<Scalar>> Mul<S> for Variable {
-    type Output = LinearCombination;
+impl<F: Field, S: Into<F>> Mul<S> for Variable<F> {
+    type Output = LinearCombination<F>;
 
     fn mul(self, other: S) -> Self::Output {
         LinearCombination {
@@ -73,54 +90,57 @@ impl<S: Into<Scalar>> Mul<S> for Variable {
 
 // Arithmetic on scalars with variables produces linear combinations
 
-impl Add<Variable> for Scalar {
-    type Output = LinearCombination;
+// pub trait Marker {}
+// impl<F: Field> Marker for F {}
 
-    fn add(self, other: Variable) -> Self::Output {
-        LinearCombination {
-            terms: vec![(Variable::One(), self), (other, Scalar::one())],
-        }
-    }
-}
+// impl<F: Field + Marker> Add<Variable<F>> for F {
+//     type Output = LinearCombination<F>;
 
-impl Sub<Variable> for Scalar {
-    type Output = LinearCombination;
+//     fn add(self, other: Variable<F>) -> Self::Output {
+//         LinearCombination {
+//             terms: vec![(Variable::One(), self), (other, F::one())],
+//         }
+//     }
+// }
 
-    fn sub(self, other: Variable) -> Self::Output {
-        LinearCombination {
-            terms: vec![(Variable::One(), self), (other, -Scalar::one())],
-        }
-    }
-}
+// impl Sub<Variable> for Field {
+//     type Output = LinearCombination<Field>;
 
-impl Mul<Variable> for Scalar {
-    type Output = LinearCombination;
+//     fn sub(self, other: Variable) -> Self::Output {
+//         LinearCombination {
+//             terms: vec![(Variable::One(), self), (other, -F::one())],
+//         }
+//     }
+// }
 
-    fn mul(self, other: Variable) -> Self::Output {
-        LinearCombination {
-            terms: vec![(other, self)],
-        }
-    }
-}
+// impl Mul<Variable> for Field {
+//     type Output = LinearCombination<Field>;
+
+//     fn mul(self, other: Variable) -> Self::Output {
+//         LinearCombination {
+//             terms: vec![(other, self)],
+//         }
+//     }
+// }
 
 /// Represents a linear combination of
 /// [`Variables`](::r1cs::Variable).  Each term is represented by a
 /// `(Variable, Scalar)` pair.
 #[derive(Clone, Debug, PartialEq)]
-pub struct LinearCombination {
-    pub(super) terms: Vec<(Variable, Scalar)>,
+pub struct LinearCombination<F: Field> {
+    pub(super) terms: Vec<(Variable<F>, F)>,
 }
 
-impl Default for LinearCombination {
+impl<F: Field> Default for LinearCombination<F> {
     fn default() -> Self {
         LinearCombination { terms: Vec::new() }
     }
 }
 
-impl FromIterator<(Variable, Scalar)> for LinearCombination {
+impl<F: Field> FromIterator<(Variable<F>, F)> for LinearCombination<F> {
     fn from_iter<T>(iter: T) -> Self
     where
-        T: IntoIterator<Item = (Variable, Scalar)>,
+        T: IntoIterator<Item = (Variable<F>, F)>,
     {
         LinearCombination {
             terms: iter.into_iter().collect(),
@@ -128,52 +148,67 @@ impl FromIterator<(Variable, Scalar)> for LinearCombination {
     }
 }
 
-impl<'a> FromIterator<&'a (Variable, Scalar)> for LinearCombination {
+impl<'a, F: Field> FromIterator<&'a (Variable<F>, F)> for LinearCombination<F> {
     fn from_iter<T>(iter: T) -> Self
     where
-        T: IntoIterator<Item = &'a (Variable, Scalar)>,
+        T: IntoIterator<Item = &'a (Variable<F>, F)>,
     {
         LinearCombination {
-            terms: iter.into_iter().cloned().collect(),
+            terms: iter.into_iter().copied().collect(),
         }
     }
 }
 
 // Arithmetic on linear combinations
 
-impl<L: Into<LinearCombination>> Add<L> for LinearCombination {
+impl<F: Field, L: Into<LinearCombination<F>>> Add<L> for LinearCombination<F> {
     type Output = Self;
 
     fn add(mut self, rhs: L) -> Self::Output {
-        self.terms.extend(rhs.into().terms.iter().cloned());
+        self.terms.extend(rhs.into().terms.iter().copied());
         LinearCombination { terms: self.terms }
     }
 }
 
-impl<L: Into<LinearCombination>> Sub<L> for LinearCombination {
+impl<F: Field, L: Into<LinearCombination<F>>> Sub<L> for LinearCombination<F> {
     type Output = Self;
 
     fn sub(mut self, rhs: L) -> Self::Output {
-        self.terms
-            .extend(rhs.into().terms.iter().map(|(var, coeff)| (*var, -coeff)));
+        self.terms.extend(
+            rhs.into()
+                .terms
+                .iter()
+                .map(|(var, coeff)| (*var, -(*coeff))),
+        );
         LinearCombination { terms: self.terms }
     }
 }
 
-impl Mul<LinearCombination> for Scalar {
-    type Output = LinearCombination;
+// impl<F: Field> Mul<LinearCombination<F>> for F {
+//     type Output = LinearCombination<F>;
 
-    fn mul(self, other: LinearCombination) -> Self::Output {
-        let out_terms = other
+//     fn mul(self, other: LinearCombination<F>) -> Self::Output {
+//         let out_terms = other
+//             .terms
+//             .into_iter()
+//             .map(|(var, scalar)| (var, scalar * self))
+//             .collect();
+//         LinearCombination { terms: out_terms }
+//     }
+// }
+
+impl<F: Field> LinearCombination<F> {
+    pub fn scalar_mul(self, scalar: F) -> LinearCombination<F> {
+        let out_terms = self
             .terms
             .into_iter()
-            .map(|(var, scalar)| (var, scalar * self))
+            .map(|(var, entry)| (var, entry * scalar))
             .collect();
         LinearCombination { terms: out_terms }
     }
 }
 
-impl Neg for LinearCombination {
+impl<F: Field> Neg for LinearCombination<F> {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
@@ -184,7 +219,7 @@ impl Neg for LinearCombination {
     }
 }
 
-impl<S: Into<Scalar>> Mul<S> for LinearCombination {
+impl<F: Field, S: Into<F>> Mul<S> for LinearCombination<F> {
     type Output = Self;
 
     fn mul(mut self, other: S) -> Self::Output {

@@ -13,11 +13,12 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use clear_on_drop::clear::Clear;
+use ark_ec::AffineRepr;
+//use clear_on_drop::clear::Clear;
 use core::iter;
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::MultiscalarMul;
+//use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
+//use curve25519_dalek::scalar::Scalar;
+//use curve25519_dalek::traits::MultiscalarMul;
 use rand_core::{CryptoRng, RngCore};
 
 use crate::errors::MPCError;
@@ -30,17 +31,17 @@ use rand::thread_rng;
 use super::messages::*;
 
 /// Used to construct a party for the aggregated rangeproof MPC protocol.
-pub struct Party {}
+pub struct Party<C: AffineRepr> {}
 
-impl Party {
+impl<C: AffineRepr> Party<C> {
     /// Constructs a `PartyAwaitingPosition` with the given rangeproof parameters.
     pub fn new<'a>(
-        bp_gens: &'a BulletproofGens,
-        pc_gens: &'a PedersenGens,
+        bp_gens: &'a BulletproofGens<C>,
+        pc_gens: &'a PedersenGens<C>,
         v: u64,
-        v_blinding: Scalar,
+        v_blinding: C::ScalarField,
         n: usize,
-    ) -> Result<PartyAwaitingPosition<'a>, MPCError> {
+    ) -> Result<PartyAwaitingPosition<'a, C>, MPCError> {
         if !(n == 8 || n == 16 || n == 32 || n == 64) {
             return Err(MPCError::InvalidBitsize);
         }
@@ -62,23 +63,23 @@ impl Party {
 }
 
 /// A party waiting for the dealer to assign their position in the aggregation.
-pub struct PartyAwaitingPosition<'a> {
-    bp_gens: &'a BulletproofGens,
-    pc_gens: &'a PedersenGens,
+pub struct PartyAwaitingPosition<'a, C: AffineRepr> {
+    bp_gens: &'a BulletproofGens<C>,
+    pc_gens: &'a PedersenGens<C>,
     n: usize,
     v: u64,
-    v_blinding: Scalar,
-    V: CompressedRistretto,
+    v_blinding: C::ScalarField,
+    V: C,
 }
 
-impl<'a> PartyAwaitingPosition<'a> {
+impl<'a, C: AffineRepr> PartyAwaitingPosition<'a, C> {
     /// Assigns a position in the aggregated proof to this party,
     /// allowing the party to commit to the bits of their value.
     #[cfg(feature = "std")]
     pub fn assign_position(
         self,
         j: usize,
-    ) -> Result<(PartyAwaitingBitChallenge<'a>, BitCommitment), MPCError> {
+    ) -> Result<(PartyAwaitingBitChallenge<'a, C>, BitCommitment<C>), MPCError> {
         self.assign_position_with_rng(j, &mut thread_rng())
     }
 
@@ -88,14 +89,14 @@ impl<'a> PartyAwaitingPosition<'a> {
         self,
         j: usize,
         rng: &mut T,
-    ) -> Result<(PartyAwaitingBitChallenge<'a>, BitCommitment), MPCError> {
+    ) -> Result<(PartyAwaitingBitChallenge<'a, C>, BitCommitment<C>), MPCError> {
         if self.bp_gens.party_capacity <= j {
             return Err(MPCError::InvalidGeneratorsLength);
         }
 
         let bp_share = self.bp_gens.share(j);
 
-        let a_blinding = Scalar::random(rng);
+        let a_blinding = C::ScalarField::random(rng);
         // Compute A = <a_L, G> + <a_R, H> + a_blinding * B_blinding
         let mut A = self.pc_gens.B_blinding * a_blinding;
 
@@ -111,12 +112,12 @@ impl<'a> PartyAwaitingPosition<'a> {
             i += 1;
         }
 
-        let s_blinding = Scalar::random(rng);
-        let s_L: Vec<Scalar> = (0..self.n).map(|_| Scalar::random(rng)).collect();
-        let s_R: Vec<Scalar> = (0..self.n).map(|_| Scalar::random(rng)).collect();
+        let s_blinding = C::ScalarField::random(rng);
+        let s_L: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::random(rng)).collect();
+        let s_R: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::random(rng)).collect();
 
         // Compute S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-        let S = RistrettoPoint::multiscalar_mul(
+        let S = C::multiscalar_mul(
             iter::once(&s_blinding).chain(s_L.iter()).chain(s_R.iter()),
             iter::once(&self.pc_gens.B_blinding)
                 .chain(bp_share.G(self.n))
@@ -145,35 +146,36 @@ impl<'a> PartyAwaitingPosition<'a> {
 }
 
 /// Overwrite secrets with null bytes when they go out of scope.
-impl<'a> Drop for PartyAwaitingPosition<'a> {
+// TODO Ralph replace with zeroize
+/*impl<'a> Drop for PartyAwaitingPosition<'a> {
     fn drop(&mut self) {
         self.v.clear();
         self.v_blinding.clear();
     }
-}
+}*/
 
 /// A party which has committed to the bits of its value
 /// and is waiting for the aggregated value challenge from the dealer.
-pub struct PartyAwaitingBitChallenge<'a> {
+pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr> {
     n: usize, // bitsize of the range
     v: u64,
-    v_blinding: Scalar,
+    v_blinding: C::ScalarField,
     j: usize,
-    pc_gens: &'a PedersenGens,
-    a_blinding: Scalar,
-    s_blinding: Scalar,
-    s_L: Vec<Scalar>,
-    s_R: Vec<Scalar>,
+    pc_gens: &'a PedersenGens<C>,
+    a_blinding: C::ScalarField,
+    s_blinding: C::ScalarField,
+    s_L: Vec<C::ScalarField>,
+    s_R: Vec<C::ScalarField>,
 }
 
-impl<'a> PartyAwaitingBitChallenge<'a> {
+impl<'a, C: AffineRepr> PartyAwaitingBitChallenge<'a, C> {
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
     #[cfg(feature = "std")]
     pub fn apply_challenge(
         self,
-        vc: &BitChallenge,
-    ) -> (PartyAwaitingPolyChallenge, PolyCommitment) {
+        vc: &BitChallenge<C>,
+    ) -> (PartyAwaitingPolyChallenge<C>, PolyCommitment<C>) {
         self.apply_challenge_with_rng(vc, &mut thread_rng())
     }
 
@@ -181,9 +183,9 @@ impl<'a> PartyAwaitingBitChallenge<'a> {
     /// compute commitments to the party's polynomial coefficients.
     pub fn apply_challenge_with_rng<T: RngCore + CryptoRng>(
         self,
-        vc: &BitChallenge,
+        vc: &BitChallenge<C>,
         rng: &mut T,
-    ) -> (PartyAwaitingPolyChallenge, PolyCommitment) {
+    ) -> (PartyAwaitingPolyChallenge<C>, PolyCommitment<C>) {
         let n = self.n;
         let offset_y = util::scalar_exp_vartime(&vc.y, (self.j * n) as u64);
         let offset_z = util::scalar_exp_vartime(&vc.z, self.j as u64);
@@ -194,10 +196,10 @@ impl<'a> PartyAwaitingBitChallenge<'a> {
 
         let offset_zz = vc.z * vc.z * offset_z;
         let mut exp_y = offset_y; // start at y^j
-        let mut exp_2 = Scalar::one(); // start at 2^0 = 1
+        let mut exp_2 = C::ScalarField::one(); // start at 2^0 = 1
         for i in 0..n {
-            let a_L_i = Scalar::from((self.v >> i) & 1);
-            let a_R_i = a_L_i - Scalar::one();
+            let a_L_i = C::ScalarField::from((self.v >> i) & 1);
+            let a_R_i = a_L_i - C::ScalarField::one();
 
             l_poly.0[i] = a_L_i - vc.z;
             l_poly.1[i] = self.s_L[i];
@@ -211,8 +213,8 @@ impl<'a> PartyAwaitingBitChallenge<'a> {
         let t_poly = l_poly.inner_product(&r_poly);
 
         // Generate x by committing to T_1, T_2 (line 49-54)
-        let t_1_blinding = Scalar::random(rng);
-        let t_2_blinding = Scalar::random(rng);
+        let t_1_blinding = C::ScalarField::random(rng);
+        let t_2_blinding = C::ScalarField::random(rng);
         let T_1 = self.pc_gens.commit(t_poly.1, t_1_blinding);
         let T_2 = self.pc_gens.commit(t_poly.2, t_2_blinding);
 
@@ -238,7 +240,8 @@ impl<'a> PartyAwaitingBitChallenge<'a> {
 }
 
 /// Overwrite secrets with null bytes when they go out of scope.
-impl<'a> Drop for PartyAwaitingBitChallenge<'a> {
+// TODO Ralph replace with zeroize
+/*impl<'a> Drop for PartyAwaitingBitChallenge<'a> {
     fn drop(&mut self) {
         self.v.clear();
         self.v_blinding.clear();
@@ -257,29 +260,29 @@ impl<'a> Drop for PartyAwaitingBitChallenge<'a> {
             e.clear();
         }
     }
-}
+}*/
 
 /// A party which has committed to their polynomial coefficents
 /// and is waiting for the polynomial challenge from the dealer.
-pub struct PartyAwaitingPolyChallenge {
-    offset_zz: Scalar,
-    l_poly: util::VecPoly1,
-    r_poly: util::VecPoly1,
-    t_poly: util::Poly2,
-    v_blinding: Scalar,
-    a_blinding: Scalar,
-    s_blinding: Scalar,
-    t_1_blinding: Scalar,
-    t_2_blinding: Scalar,
+pub struct PartyAwaitingPolyChallenge<C: AffineRepr> {
+    offset_zz: C::ScalarField,
+    l_poly: util::VecPoly1<C>,
+    r_poly: util::VecPoly1<C>,
+    t_poly: util::Poly2<C>,
+    v_blinding: C::ScalarField,
+    a_blinding: C::ScalarField,
+    s_blinding: C::ScalarField,
+    t_1_blinding: C::ScalarField,
+    t_2_blinding: C::ScalarField,
 }
 
-impl PartyAwaitingPolyChallenge {
+impl<C: AffineRepr> PartyAwaitingPolyChallenge<C> {
     /// Receive a [`PolyChallenge`] from the dealer and compute the
     /// party's proof share.
-    pub fn apply_challenge(self, pc: &PolyChallenge) -> Result<ProofShare, MPCError> {
+    pub fn apply_challenge(self, pc: &PolyChallenge<C>) -> Result<ProofShare<C>, MPCError> {
         // Prevent a malicious dealer from annihilating the blinding
         // factors by supplying a zero challenge.
-        if pc.x == Scalar::zero() {
+        if pc.x == C::ScalarField::zero() {
             return Err(MPCError::MaliciousDealer);
         }
 
@@ -305,8 +308,9 @@ impl PartyAwaitingPolyChallenge {
     }
 }
 
-/// Overwrite secrets with null bytes when they go out of scope.
-impl Drop for PartyAwaitingPolyChallenge {
+// Overwrite secrets with null bytes when they go out of scope.
+// TODO ralph implement with zeroize
+/*impl Drop for PartyAwaitingPolyChallenge {
     fn drop(&mut self) {
         self.v_blinding.clear();
         self.a_blinding.clear();
@@ -317,4 +321,4 @@ impl Drop for PartyAwaitingPolyChallenge {
         // Note: polynomials r_poly, l_poly and t_poly
         // are cleared within their own Drop impls.
     }
-}
+}*/

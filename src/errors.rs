@@ -37,12 +37,6 @@ pub enum ProofError {
         error("Invalid generators size, too few generators for proof")
     )]
     InvalidGeneratorsLength,
-    /// This error occurs when inputs are the incorrect length for the proof.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid input size, incorrect input length for proof")
-    )]
-    InvalidInputLength,
     /// This error results from an internal error during proving.
     ///
     /// The single-party prover is implemented by performing
@@ -122,7 +116,6 @@ pub enum MPCError {
 /// Represents an error during the proving or verifying of a constraint system.
 ///
 /// XXX: should this be separate from a `ProofError`?
-#[cfg(feature = "yoloproofs")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Error))]
 pub enum R1CSError {
@@ -154,7 +147,6 @@ pub enum R1CSError {
     },
 }
 
-#[cfg(feature = "yoloproofs")]
 impl From<ProofError> for R1CSError {
     fn from(e: ProofError) -> R1CSError {
         match e {

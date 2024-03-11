@@ -1,10 +1,5 @@
 [package]
 name = "bulletproofs"
-# Before doing a release:
-# - update version field 
-# - update html_root_url
-# - ensure yoloproofs was disabled in an atomic (revertable) commit
-# - update CHANGELOG
 version = "2.0.0"
 authors = ["Cathie Yun <cathieyun@gmail.com>", 
            "Henry de Valence <hdevalence@hdevalence.ca>",
@@ -18,38 +13,42 @@ description = "A pure-Rust implementation of Bulletproofs using Ristretto"
 edition = "2018"
 
 [dependencies]
-curve25519-dalek = { version = "2", default-features = false, features = ["u64_backend", "nightly", "serde", "alloc"] }
 subtle = { version = "2", default-features = false }
-sha3 = { version = "0.8", default-features = false }
-digest = { version = "0.8", default-features = false }
+sha3 = { version = "0.9.1", default-features = false }
+digest = { version = "0.9.0", default-features = false }
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-rand = { version = "0.7", default-features = false, optional = true }
+rand = { version = "0.8", default-features = false, optional = true }
 byteorder = { version = "1", default-features = false }
 serde = { version = "1", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1", default-features = false }
 serde_json = "1.0"
 thiserror = { version = "1", optional = true }
 merlin = { version = "2", default-features = false }
-clear_on_drop = { version = "0.2" }
+ark-ec = { version = "0.4.0"}
+ark-ff = { version = "0.4.0"}
+ark-serialize = { version = "0.4.0" } 
+ark-std = { version = "0.4.0" } 
+rust-crypto = "^0.2"
+rayon = {version = "1.5.3", optional = true}
+zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [dev-dependencies]
-hex = "0.3"
 criterion = "0.3"
-bincode = "1"
-rand_chacha = "0.2"
+ark-algebra-test-templates = "0.3.0"
+ark-pallas = "0.4.0"
+ark-vesta = "0.4.0"
 
 [features]
-default = ["std", "avx2_backend"]
-avx2_backend = ["curve25519-dalek/avx2_backend"]
-yoloproofs = []
+default = ["std", "parallel", "asm"]
 std = ["rand", "rand/std", "thiserror"]
+asm = ["ark-ff/asm"]
+parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "rayon"]
 
 [[test]]
 name = "range_proof"
 
 [[test]]
 name = "r1cs"
-required-features = ["yoloproofs"]
 
 [[bench]]
 name = "range_proof"
@@ -62,7 +61,6 @@ harness = false
 [[bench]]
 name = "r1cs"
 harness = false
-required-features = ["yoloproofs"]
 
 [[bench]]
 name = "linear_proof"

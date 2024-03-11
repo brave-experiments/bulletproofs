@@ -5,51 +5,144 @@ extern crate alloc;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use clear_on_drop::clear::Clear;
-use curve25519_dalek::scalar::Scalar;
+use ark_ec::AffineRepr;
+use ark_ff::Field;
+use zeroize::ZeroizeOnDrop;
 
 use crate::inner_product_proof::inner_product;
 
 /// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
-pub struct VecPoly1(pub Vec<Scalar>, pub Vec<Scalar>);
+#[derive(ZeroizeOnDrop)]
+pub struct VecPoly1<F: Field>(pub Vec<F>, pub Vec<F>);
 
 /// Represents a degree-3 vector polynomial
 /// \\(\mathbf{a} + \mathbf{b} \cdot x + \mathbf{c} \cdot x^2 + \mathbf{d} \cdot x^3 \\).
-#[cfg(feature = "yoloproofs")]
-pub struct VecPoly3(
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-);
+#[derive(ZeroizeOnDrop)]
+pub struct VecPoly3<F: Field>(pub Vec<F>, pub Vec<F>, pub Vec<F>, pub Vec<F>);
+
+pub const T_LABELS: [&[u8]; 25] = [
+    b"T_0", b"T_1", b"T_2", b"T_3", b"T_4", b"T_5", b"T_6", b"T_7", b"T_8", b"T_9", b"T_10",
+    b"T_11", b"T_12", b"T_13", b"T_14", b"T_15", b"T_16", b"T_17", b"T_18", b"T_19", b"T_20",
+    b"T_21", b"T_22", b"T_23", b"T_24",
+];
+
+/// The general case for Vector CP.
+pub struct VecPoly<F: Field>(Vec<Vec<F>>);
+
+pub struct Poly<F: Field>(Vec<F>);
+
+impl<F: Field> Poly<F> {
+    pub fn zero(deg: usize) -> Self {
+        Poly(vec![F::zero(); deg + 1])
+    }
+
+    pub fn coeff(&mut self) -> &mut [F] {
+        &mut self.0
+    }
+
+    pub fn deg(&self) -> usize {
+        self.0.len() - 1
+    }
+
+    pub fn eval(&self, x: F) -> F {
+        let mut out = F::zero();
+        for v in self.0.iter().rev() {
+            out *= x;
+            out += v;
+        }
+        out
+    }
+}
+
+impl<F: Field> From<Vec<F>> for Poly<F> {
+    fn from(v: Vec<F>) -> Self {
+        Self(v)
+    }
+}
+
+impl<F: Field> VecPoly<F> {
+    pub fn coeff_mut(&mut self, deg: usize) -> &mut [F] {
+        &mut self.0[deg]
+    }
+
+    pub fn deg(&self) -> usize {
+        self.0.len() - 1
+    }
+
+    pub fn coeff(&self, deg: usize) -> &[F] {
+        &self.0[deg]
+    }
+
+    pub fn zero(n: usize, deg: usize) -> Self {
+        VecPoly(vec![vec![F::zero(); n]; deg + 1])
+    }
+
+    pub fn eval(&self, x: F) -> Vec<F> {
+        let n = self.0[0].len();
+        let mut out = vec![F::zero(); n];
+        for i in 0..n {
+            for v in self.0.iter().rev() {
+                out[i] *= x;
+                out[i] += v[i];
+            }
+        }
+        out
+    }
+
+    /// Compute an inner product of `lhs`, `rhs` which have the property that:
+    /// - `lhs.0` is zero;
+    /// - `rhs.2` is zero;
+    /// This is the case in the constraint system proof.
+    pub fn inner_product(lhs: &Self, rhs: &Self) -> Poly<F> {
+        // TODO: make checks that l_poly.0 and r_poly.2 are zero.
+
+        let deg = lhs.deg() + rhs.deg();
+
+        // println!("combined degree: {}", deg);
+
+        let mut res = Poly::zero(deg);
+
+        for d in 0..deg + 1 {
+            for l in 0..(d + 1) {
+                let r = d - l;
+                if lhs.deg() >= l && rhs.deg() >= r {
+                    res.coeff()[d] += inner_product(lhs.coeff(l), rhs.coeff(r));
+                }
+            }
+        }
+
+        res
+    }
+}
 
 /// Represents a degree-2 scalar polynomial \\(a + b \cdot x + c \cdot x^2\\)
-pub struct Poly2(pub Scalar, pub Scalar, pub Scalar);
+#[derive(ZeroizeOnDrop)]
+pub struct Poly2<F: Field>(pub F, pub F, pub F);
 
 /// Represents a degree-6 scalar polynomial, without the zeroth degree
 /// \\(a \cdot x + b \cdot x^2 + c \cdot x^3 + d \cdot x^4 + e \cdot x^5 + f \cdot x^6\\)
-#[cfg(feature = "yoloproofs")]
-pub struct Poly6 {
-    pub t1: Scalar,
-    pub t2: Scalar,
-    pub t3: Scalar,
-    pub t4: Scalar,
-    pub t5: Scalar,
-    pub t6: Scalar,
+#[derive(ZeroizeOnDrop)]
+pub struct Poly6<F: Field> {
+    pub t1: F,
+    pub t2: F,
+    pub t3: F,
+    pub t4: F,
+    pub t5: F,
+    pub t6: F,
 }
 
 /// Provides an iterator over the powers of a `Scalar`.
 ///
 /// This struct is created by the `exp_iter` function.
-pub struct ScalarExp {
-    x: Scalar,
-    next_exp_x: Scalar,
+pub struct ScalarExp<F: Field> {
+    x: F,
+    next_exp_x: F,
 }
 
-impl Iterator for ScalarExp {
-    type Item = Scalar;
+impl<F: Field> Iterator for ScalarExp<F> {
+    type Item = F;
 
-    fn next(&mut self) -> Option<Scalar> {
+    fn next(&mut self) -> Option<F> {
         let exp_x = self.next_exp_x;
         self.next_exp_x *= self.x;
         Some(exp_x)
@@ -61,29 +154,29 @@ impl Iterator for ScalarExp {
 }
 
 /// Return an iterator of the powers of `x`.
-pub fn exp_iter(x: Scalar) -> ScalarExp {
-    let next_exp_x = Scalar::one();
+pub fn exp_iter<F: Field>(x: F) -> ScalarExp<F> {
+    let next_exp_x = F::one();
     ScalarExp { x, next_exp_x }
 }
 
-pub fn add_vec(a: &[Scalar], b: &[Scalar]) -> Vec<Scalar> {
+pub fn add_vec<F: Field>(a: &[F], b: &[F]) -> Vec<F> {
     if a.len() != b.len() {
         // throw some error
         //println!("lengths of vectors don't match for vector addition");
     }
-    let mut out = vec![Scalar::zero(); b.len()];
+    let mut out = vec![F::zero(); b.len()];
     for i in 0..a.len() {
         out[i] = a[i] + b[i];
     }
     out
 }
 
-impl VecPoly1 {
+impl<F: Field> VecPoly1<F> {
     pub fn zero(n: usize) -> Self {
-        VecPoly1(vec![Scalar::zero(); n], vec![Scalar::zero(); n])
+        VecPoly1(vec![F::zero(); n], vec![F::zero(); n])
     }
 
-    pub fn inner_product(&self, rhs: &VecPoly1) -> Poly2 {
+    pub fn inner_product(&self, rhs: &VecPoly1<F>) -> Poly2<F> {
         // Uses Karatsuba's method
         let l = self;
         let r = rhs;
@@ -99,9 +192,9 @@ impl VecPoly1 {
         Poly2(t0, t1, t2)
     }
 
-    pub fn eval(&self, x: Scalar) -> Vec<Scalar> {
+    pub fn eval(&self, x: F) -> Vec<F> {
         let n = self.0.len();
-        let mut out = vec![Scalar::zero(); n];
+        let mut out = vec![F::zero(); n];
         for i in 0..n {
             out[i] = self.0[i] + self.1[i] * x;
         }
@@ -109,14 +202,13 @@ impl VecPoly1 {
     }
 }
 
-#[cfg(feature = "yoloproofs")]
-impl VecPoly3 {
+impl<F: Field> VecPoly3<F> {
     pub fn zero(n: usize) -> Self {
         VecPoly3(
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
+            vec![F::zero(); n],
+            vec![F::zero(); n],
+            vec![F::zero(); n],
+            vec![F::zero(); n],
         )
     }
 
@@ -124,7 +216,7 @@ impl VecPoly3 {
     /// - `lhs.0` is zero;
     /// - `rhs.2` is zero;
     /// This is the case in the constraint system proof.
-    pub fn special_inner_product(lhs: &Self, rhs: &Self) -> Poly6 {
+    pub fn special_inner_product(lhs: &Self, rhs: &Self) -> Poly6<F> {
         // TODO: make checks that l_poly.0 and r_poly.2 are zero.
 
         let t1 = inner_product(&lhs.1, &rhs.0);
@@ -144,9 +236,9 @@ impl VecPoly3 {
         }
     }
 
-    pub fn eval(&self, x: Scalar) -> Vec<Scalar> {
+    pub fn eval(&self, x: F) -> Vec<F> {
         let n = self.0.len();
-        let mut out = vec![Scalar::zero(); n];
+        let mut out = vec![F::zero(); n];
         for i in 0..n {
             out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
         }
@@ -154,80 +246,30 @@ impl VecPoly3 {
     }
 }
 
-impl Poly2 {
-    pub fn eval(&self, x: Scalar) -> Scalar {
+impl<F: Field> Poly2<F> {
+    pub fn eval(&self, x: F) -> F {
         self.0 + x * (self.1 + x * self.2)
     }
 }
 
-#[cfg(feature = "yoloproofs")]
-impl Poly6 {
-    pub fn eval(&self, x: Scalar) -> Scalar {
+impl<F: Field> Poly6<F> {
+    pub fn eval(&self, x: F) -> F {
         x * (self.t1 + x * (self.t2 + x * (self.t3 + x * (self.t4 + x * (self.t5 + x * self.t6)))))
-    }
-}
-
-impl Drop for VecPoly1 {
-    fn drop(&mut self) {
-        for e in self.0.iter_mut() {
-            e.clear();
-        }
-        for e in self.1.iter_mut() {
-            e.clear();
-        }
-    }
-}
-
-impl Drop for Poly2 {
-    fn drop(&mut self) {
-        self.0.clear();
-        self.1.clear();
-        self.2.clear();
-    }
-}
-
-#[cfg(feature = "yoloproofs")]
-impl Drop for VecPoly3 {
-    fn drop(&mut self) {
-        for e in self.0.iter_mut() {
-            e.clear();
-        }
-        for e in self.1.iter_mut() {
-            e.clear();
-        }
-        for e in self.2.iter_mut() {
-            e.clear();
-        }
-        for e in self.3.iter_mut() {
-            e.clear();
-        }
-    }
-}
-
-#[cfg(feature = "yoloproofs")]
-impl Drop for Poly6 {
-    fn drop(&mut self) {
-        self.t1.clear();
-        self.t2.clear();
-        self.t3.clear();
-        self.t4.clear();
-        self.t5.clear();
-        self.t6.clear();
     }
 }
 
 /// Raises `x` to the power `n` using binary exponentiation,
 /// with (1 to 2)*lg(n) scalar multiplications.
 /// TODO: a consttime version of this would be awfully similar to a Montgomery ladder.
-pub fn scalar_exp_vartime(x: &Scalar, mut n: u64) -> Scalar {
-    let mut result = Scalar::one();
+pub fn scalar_exp_vartime<F: Field>(x: &F, mut n: u64) -> F {
+    let mut result = F::one();
     let mut aux = *x; // x, x^2, x^4, x^8, ...
     while n > 0 {
         let bit = n & 1;
         if bit == 1 {
-            result = result * aux;
+            result *= aux;
         }
-        n = n >> 1;
+        n >>= 1;
         aux = aux * aux; // FIXME: one unnecessary mult at the last step here!
     }
     result
@@ -237,26 +279,26 @@ pub fn scalar_exp_vartime(x: &Scalar, mut n: u64) -> Scalar {
 /// If `n` is a power of 2, it uses the efficient algorithm with `2*lg n` multiplications and additions.
 /// If `n` is not a power of 2, it uses the slow algorithm with `n` multiplications and additions.
 /// In the Bulletproofs case, all calls to `sum_of_powers` should have `n` as a power of 2.
-pub fn sum_of_powers(x: &Scalar, n: usize) -> Scalar {
+pub fn sum_of_powers<F: Field>(x: &F, n: usize) -> F {
     if !n.is_power_of_two() {
         return sum_of_powers_slow(x, n);
     }
     if n == 0 || n == 1 {
-        return Scalar::from(n as u64);
+        return F::from(n as u64);
     }
     let mut m = n;
-    let mut result = Scalar::one() + x;
+    let mut result = F::one() + x;
     let mut factor = *x;
     while m > 2 {
         factor = factor * factor;
         result = result + factor * result;
-        m = m / 2;
+        m /= 2;
     }
     result
 }
 
 // takes the sum of all of the powers of x, up to n
-fn sum_of_powers_slow(x: &Scalar, n: usize) -> Scalar {
+fn sum_of_powers_slow<F: Field>(x: &F, n: usize) -> F {
     exp_iter(*x).take(n).sum()
 }
 
@@ -267,9 +309,41 @@ pub fn read32(data: &[u8]) -> [u8; 32] {
     buf32
 }
 
+pub fn affine_from_bytes_tai<C: AffineRepr>(bytes: &[u8]) -> C {
+    extern crate crypto;
+    use crypto::digest::Digest;
+    use crypto::sha3::Sha3;
+
+    for i in 0..=u8::max_value() {
+        let mut sha = Sha3::sha3_256();
+        sha.input(bytes);
+        sha.input(&[i]);
+        let mut buf = [0u8; 32];
+        sha.result(&mut buf);
+        let res = C::from_random_bytes(&buf);
+        if let Some(point) = res {
+            return point;
+        }
+    }
+    panic!()
+}
+
+pub fn field_as_bytes<F: Field>(field: &F) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    if let Err(e) = field.serialize_compressed(&mut bytes) {
+        panic!("{}", e)
+    }
+    bytes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use ark_pallas::*;
+
+    type Scalar = <Affine as AffineRepr>::ScalarField;
+    use ark_ff::{One, Zero};
 
     #[test]
     fn exp_2_is_powers_of_2() {
@@ -298,33 +372,6 @@ mod tests {
         assert_eq!(Scalar::from(40u64), inner_product(&a, &b));
     }
 
-    /// Raises `x` to the power `n`.
-    fn scalar_exp_vartime_slow(x: &Scalar, n: u64) -> Scalar {
-        let mut result = Scalar::one();
-        for _ in 0..n {
-            result = result * x;
-        }
-        result
-    }
-
-    #[test]
-    fn test_scalar_exp() {
-        let x = Scalar::from_bits(
-            *b"\x84\xfc\xbcOx\x12\xa0\x06\xd7\x91\xd9z:'\xdd\x1e!CE\xf7\xb1\xb9Vz\x810sD\x96\x85\xb5\x07",
-        );
-        assert_eq!(scalar_exp_vartime(&x, 0), Scalar::one());
-        assert_eq!(scalar_exp_vartime(&x, 1), x);
-        assert_eq!(scalar_exp_vartime(&x, 2), x * x);
-        assert_eq!(scalar_exp_vartime(&x, 3), x * x * x);
-        assert_eq!(scalar_exp_vartime(&x, 4), x * x * x * x);
-        assert_eq!(scalar_exp_vartime(&x, 5), x * x * x * x * x);
-        assert_eq!(scalar_exp_vartime(&x, 64), scalar_exp_vartime_slow(&x, 64));
-        assert_eq!(
-            scalar_exp_vartime(&x, 0b11001010),
-            scalar_exp_vartime_slow(&x, 0b11001010)
-        );
-    }
-
     #[test]
     fn test_sum_of_powers() {
         let x = Scalar::from(10u64);
@@ -348,50 +395,5 @@ mod tests {
         assert_eq!(sum_of_powers_slow(&x, 4), Scalar::from(1111u64));
         assert_eq!(sum_of_powers_slow(&x, 5), Scalar::from(11111u64));
         assert_eq!(sum_of_powers_slow(&x, 6), Scalar::from(111111u64));
-    }
-
-    #[test]
-    fn vec_of_scalars_clear_on_drop() {
-        let mut v = vec![Scalar::from(24u64), Scalar::from(42u64)];
-
-        for e in v.iter_mut() {
-            e.clear();
-        }
-
-        fn flat_slice<T>(x: &[T]) -> &[u8] {
-            use core::mem;
-            use core::slice;
-
-            unsafe { slice::from_raw_parts(x.as_ptr() as *const u8, mem::size_of_val(x)) }
-        }
-
-        assert_eq!(flat_slice(&v.as_slice()), &[0u8; 64][..]);
-        assert_eq!(v[0], Scalar::zero());
-        assert_eq!(v[1], Scalar::zero());
-    }
-
-    #[test]
-    fn tuple_of_scalars_clear_on_drop() {
-        let mut v = Poly2(
-            Scalar::from(24u64),
-            Scalar::from(42u64),
-            Scalar::from(255u64),
-        );
-
-        v.0.clear();
-        v.1.clear();
-        v.2.clear();
-
-        fn as_bytes<T>(x: &T) -> &[u8] {
-            use core::mem;
-            use core::slice;
-
-            unsafe { slice::from_raw_parts(x as *const T as *const u8, mem::size_of_val(x)) }
-        }
-
-        assert_eq!(as_bytes(&v), &[0u8; 96][..]);
-        assert_eq!(v.0, Scalar::zero());
-        assert_eq!(v.1, Scalar::zero());
-        assert_eq!(v.2, Scalar::zero());
     }
 }

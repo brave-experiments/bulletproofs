@@ -1,7 +1,8 @@
 //! Definition of the constraint system trait.
 
-use super::{LinearCombination, R1CSError, Variable};
-use curve25519_dalek::scalar::Scalar;
+use super::linear_combination::{LinearCombination, Variable};
+use super::R1CSError;
+use ark_ff::Field;
 use merlin::Transcript;
 
 /// The interface for a constraint system, abstracting over the prover
@@ -16,7 +17,9 @@ use merlin::Transcript;
 /// verifier, gadgets for the constraint system should be written
 /// using the `ConstraintSystem` trait, so that the prover and
 /// verifier share the logic for specifying constraints.
-pub trait ConstraintSystem {
+pub trait ConstraintSystem<F: Field> {
+    // type Scalar: Field;
+
     /// Leases the proof transcript to the user, so they can
     /// add extra data to which the proof must be bound, but which
     /// is not available before creation of the constraint system.
@@ -38,9 +41,9 @@ pub trait ConstraintSystem {
     /// Returns `(left, right, out)` for use in further constraints.
     fn multiply(
         &mut self,
-        left: LinearCombination,
-        right: LinearCombination,
-    ) -> (Variable, Variable, Variable);
+        left: LinearCombination<F>,
+        right: LinearCombination<F>,
+    ) -> (Variable<F>, Variable<F>, Variable<F>);
 
     /// Allocate a single variable.
     ///
@@ -52,7 +55,7 @@ pub trait ConstraintSystem {
     /// has the `right` assigned to zero and all its variables committed.
     ///
     /// Returns unconstrained `Variable` for use in further constraints.
-    fn allocate(&mut self, assignment: Option<Scalar>) -> Result<Variable, R1CSError>;
+    fn allocate(&mut self, assignment: Option<F>) -> Result<Variable<F>, R1CSError>;
 
     /// Allocate variables `left`, `right`, and `out`
     /// with the implicit constraint that
@@ -63,17 +66,17 @@ pub trait ConstraintSystem {
     /// Returns `(left, right, out)` for use in further constraints.
     fn allocate_multiplier(
         &mut self,
-        input_assignments: Option<(Scalar, Scalar)>,
-    ) -> Result<(Variable, Variable, Variable), R1CSError>;
+        input_assignments: Option<(F, F)>,
+    ) -> Result<(Variable<F>, Variable<F>, Variable<F>), R1CSError>;
 
-    /// Counts the amount of allocated multipliers.
-    fn multipliers_len(&self) -> usize;
+    /// Counts the amount of constraints in the constraint system.
+    fn metrics(&self) -> crate::r1cs::Metrics;
 
     /// Enforce the explicit constraint that
     /// ```text
     /// lc = 0
     /// ```
-    fn constrain(&mut self, lc: LinearCombination);
+    fn constrain(&mut self, lc: LinearCombination<F>);
 }
 
 /// An extension to the constraint system trait that permits randomized constraints.
@@ -81,9 +84,9 @@ pub trait ConstraintSystem {
 /// while gadgets that need randomization should use trait bound `CS: RandomizedConstraintSystem`.
 /// Gadgets generally _should not_ use this trait as a bound on the CS argument: it should be used
 /// by the higher-order protocol that composes gadgets together.
-pub trait RandomizableConstraintSystem: ConstraintSystem {
+pub trait RandomizableConstraintSystem<F: Field>: ConstraintSystem<F> {
     /// Represents a concrete type for the CS in a randomization phase.
-    type RandomizedCS: RandomizedConstraintSystem;
+    type RandomizedCS: RandomizedConstraintSystem<F>;
 
     /// Specify additional variables and constraints randomized using a challenge scalar
     /// bound to the assignments of the non-randomized variables.
@@ -104,9 +107,9 @@ pub trait RandomizableConstraintSystem: ConstraintSystem {
     ///     // ...
     /// })
     /// ```
-    fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
+    fn specify_randomized_constraints<F2>(&mut self, callback: F2) -> Result<(), R1CSError>
     where
-        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
+        F2: 'static + FnOnce(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
 }
 
 /// Represents a constraint system in the second phase:
@@ -114,7 +117,7 @@ pub trait RandomizableConstraintSystem: ConstraintSystem {
 ///
 /// Note: this trait also includes `ConstraintSystem` trait
 /// in order to allow composition of gadgets: e.g. a shuffle gadget can be used in both phases.
-pub trait RandomizedConstraintSystem: ConstraintSystem {
+pub trait RandomizedConstraintSystem<F: Field>: ConstraintSystem<F> {
     /// Generates a challenge scalar.
     ///
     /// ### Usage
@@ -131,5 +134,5 @@ pub trait RandomizedConstraintSystem: ConstraintSystem {
     ///     // ...
     /// })
     /// ```
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar;
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> F;
 }
