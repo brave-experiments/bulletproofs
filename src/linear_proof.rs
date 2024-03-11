@@ -130,10 +130,8 @@ impl<C: AffineRepr> LinearProof<C> {
                 // b_L = b_L + x_j * b_R
                 b_L[i] = b_L[i] + x_j * b_R[i];
                 // G_L = G_L + x_j * G_R
-                G_L[i] = C::vartime_multiscalar_mul(
-                    &[C::ScalarField::one(), x_j],
-                    &[G_L[i], G_R[i]],
-                );
+                G_L[i] =
+                    C::vartime_multiscalar_mul(&[C::ScalarField::one(), x_j], &[G_L[i], G_R[i]]);
             }
             a = a_L;
             b = b_L;
@@ -378,8 +376,8 @@ impl<C: AffineRepr> LinearProof<C> {
             return Err(ProofError::FormatError);
         }
 
-        use crate::util::read32;
         use crate::util::affine_from_bytes_tai;
+        use crate::util::read32;
 
         let mut L_vec: Vec<C> = Vec::with_capacity(lg_n);
         let mut R_vec: Vec<C> = Vec::with_capacity(lg_n);
@@ -408,7 +406,7 @@ impl<C: AffineRepr> LinearProof<C> {
 
 #[cfg(test)]
 mod tests {
-    // TODO fix me 
+    // TODO fix me
     /*use super::*;
 
     use ark_pallas::Affine;

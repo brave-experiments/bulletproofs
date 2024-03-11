@@ -138,8 +138,8 @@ impl<C: AffineRepr> RangeProof<C> {
         n: usize,
         rng: &mut T,
     ) -> Result<(RangeProof<C>, Vec<C>), ProofError> {
-        use self::dealer::*;    // TODO get rid of dealer 
-        use self::party::*;     // TODO get rid of party
+        use self::dealer::*; // TODO get rid of dealer
+        use self::party::*; // TODO get rid of party
 
         if values.len() != blindings.len() {
             return Err(ProofError::WrongNumBlindingFactors);
@@ -222,13 +222,7 @@ impl<C: AffineRepr> RangeProof<C> {
         V: &C,
         n: usize,
     ) -> Result<(), ProofError> {
-        self.verify_single_with_rng(bp_gens, 
-            pc_gens, 
-            transcript, 
-            V, 
-            n, 
-            &mut thread_rng()
-        )
+        self.verify_single_with_rng(bp_gens, pc_gens, transcript, V, n, &mut thread_rng())
     }
 
     /// Verifies a rangeproof for a given value commitment \\(V\\).
@@ -243,14 +237,7 @@ impl<C: AffineRepr> RangeProof<C> {
         n: usize,
         rng: &mut T,
     ) -> Result<(), ProofError> {
-        self.verify_multiple_with_rng(
-            bp_gens, 
-            pc_gens, 
-            transcript, 
-            &[*V], 
-            n, 
-            rng
-        )
+        self.verify_multiple_with_rng(bp_gens, pc_gens, transcript, &[*V], n, rng)
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
@@ -315,7 +302,8 @@ impl<C: AffineRepr> RangeProof<C> {
 
         // Construct concat_z_and_2, an iterator of the values of
         // z^0 * \vec(2)^n || z^1 * \vec(2)^n || ... || z^(m-1) * \vec(2)^n
-        let powers_of_2: Vec<C::ScalarField> = util::exp_iter(C::ScalarField::from(2u64)).take(n).collect();
+        let powers_of_2: Vec<C::ScalarField> =
+            util::exp_iter(C::ScalarField::from(2u64)).take(n).collect();
         let concat_z_and_2: Vec<C::ScalarField> = util::exp_iter(z)
             .take(m)
             .flat_map(|exp_z| powers_of_2.iter().map(move |exp_2| exp_2 * exp_z))
@@ -422,8 +410,8 @@ impl<C: AffineRepr> RangeProof<C> {
             return Err(ProofError::FormatError);
         }
 
-        use crate::util::read32;
         use crate::util::affine_from_bytes_tai;
+        use crate::util::read32;
 
         let A = affine_from_bytes_tai::<C>(&read32(&slice[0 * 32..]));
         let S = affine_from_bytes_tai::<C>(&read32(&slice[1 * 32..]));

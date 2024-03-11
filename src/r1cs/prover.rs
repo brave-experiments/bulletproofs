@@ -41,7 +41,8 @@ pub struct Prover<'g, T: BorrowMut<Transcript>, C: AffineRepr> {
 
     /// This list holds closures that will be called in the second phase of the protocol,
     /// when non-randomized variables are committed.
-    deferred_constraints: Vec<Box<dyn FnOnce(&mut RandomizingProver<'g, T, C>) -> Result<(), R1CSError>>>,
+    deferred_constraints:
+        Vec<Box<dyn FnOnce(&mut RandomizingProver<'g, T, C>) -> Result<(), R1CSError>>>,
 
     /// Index of a pending multiplier that's not fully assigned yet.
     pending_multiplier: Option<usize>,
@@ -90,7 +91,11 @@ impl<'g, T: BorrowMut<Transcript>, C: AffineRepr> ConstraintSystem<C::ScalarFiel
         &mut self,
         mut left: LinearCombination<C: ScalarField>,
         mut right: LinearCombination<C: ScalarField>,
-    ) -> (Variable<C: ScalarField>, Variable<C: ScalarField>, Variable<C: ScalarField>) {
+    ) -> (
+        Variable<C: ScalarField>,
+        Variable<C: ScalarField>,
+        Variable<C: ScalarField>,
+    ) {
         // Synthesize the assignments for l,r,o
         let l = self.eval(&left);
         let r = self.eval(&right);
@@ -114,7 +119,10 @@ impl<'g, T: BorrowMut<Transcript>, C: AffineRepr> ConstraintSystem<C::ScalarFiel
         (l_var, r_var, o_var)
     }
 
-    fn allocate(&mut self, assignment: Option<C::ScalarField>) -> Result<Variable<C::ScalarField>, R1CSError> {
+    fn allocate(
+        &mut self,
+        assignment: Option<C::ScalarField>,
+    ) -> Result<Variable<C::ScalarField>, R1CSError> {
         let scalar = assignment.ok_or(R1CSError::MissingAssignment)?;
 
         match self.pending_multiplier {
@@ -309,10 +317,10 @@ impl<'g, T: BorrowMut<Transcript>, C: AffineRepr> Prover<'g, T, C> {
     ///
     /// Returns a pair of a Pedersen commitment (as a compressed Ristretto point),
     /// and a [`Variable`] corresponding to it, which can be used to form constraints.
-   pub fn commit(
-    &mut self,
-    v: C::ScalarField,
-    v_blinding: C::ScalarField,
+    pub fn commit(
+        &mut self,
+        v: C::ScalarField,
+        v_blinding: C::ScalarField,
     ) -> (C, Variable<C::ScalarField>) {
         let i = self.secrets.v.len();
         self.secrets.v.push(v);

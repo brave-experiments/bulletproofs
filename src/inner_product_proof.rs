@@ -6,13 +6,13 @@ extern crate alloc;
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;
 
-use core::iter;
 use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{fields::batch_inversion, Field};
 use ark_serialize::{
     CanonicalDeserialize, CanonicalSerialize, Compress, Read, SerializationError, Valid, Write,
 };
 use ark_std::One;
+use core::iter;
 use merlin::Transcript;
 
 use crate::errors::ProofError;
@@ -89,16 +89,16 @@ impl<C: AffineRepr> InnerProductProof<C> {
             let c_R = inner_product(a_R, b_L);
 
             let l_scalars: Vec<C::ScalarField> = a_L
-                    .iter()
-                    .zip(G_factors[n..2 * n].iter())
-                    .map(|(a_L_i, g)| *a_L_i * g)
-                    .chain(
-                        b_R.iter()
-                            .zip(H_factors[0..n].iter())
-                            .map(|(b_R_i, h)| *b_R_i * h),
-                    )
-                    .chain(iter::once(c_L))
-                    .collect();
+                .iter()
+                .zip(G_factors[n..2 * n].iter())
+                .map(|(a_L_i, g)| *a_L_i * g)
+                .chain(
+                    b_R.iter()
+                        .zip(H_factors[0..n].iter())
+                        .map(|(b_R_i, h)| *b_R_i * h),
+                )
+                .chain(iter::once(c_L))
+                .collect();
             let l_points: Vec<C> = G_R
                 .iter()
                 .chain(H_L.iter())

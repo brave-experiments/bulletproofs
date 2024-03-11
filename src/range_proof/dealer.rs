@@ -222,7 +222,10 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     /// Used as a helper function by `receive_trusted_shares` (which
     /// just hands back the result) and `receive_shares` (which
     /// validates the proof shares.
-    fn assemble_shares(&mut self, proof_shares: &[ProofShare<C>]) -> Result<RangeProof<C>, MPCError> {
+    fn assemble_shares(
+        &mut self,
+        proof_shares: &[ProofShare<C>],
+    ) -> Result<RangeProof<C>, MPCError> {
         if self.m != proof_shares.len() {
             return Err(MPCError::WrongNumProofShares);
         }
@@ -254,7 +257,9 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
         let w = self.transcript.challenge_scalar(b"w");
         let Q = w * self.pc_gens.B;
 
-        let G_factors: Vec<C::ScalarField> = iter::repeat(C::ScalarField::one()).take(self.n * self.m).collect();
+        let G_factors: Vec<C::ScalarField> = iter::repeat(C::ScalarField::one())
+            .take(self.n * self.m)
+            .collect();
         let H_factors: Vec<C::ScalarField> = util::exp_iter(self.bit_challenge.y.invert())
             .take(self.n * self.m)
             .collect();

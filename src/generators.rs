@@ -6,14 +6,14 @@
 
 extern crate alloc;
 
+use crate::util;
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
-use std::marker::PhantomData;
-use crate::util;
 use digest::{ExtendableOutputDirty, Update, XofReader};
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use sha3::{Sha3XofReader, Shake256};
+use std::marker::PhantomData;
 
 /// Represents a pair of base points for Pedersen commitments.
 ///

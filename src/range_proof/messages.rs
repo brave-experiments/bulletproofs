@@ -8,8 +8,8 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use serde_derive::{Serialize, Deserialize};
 use core::iter;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::generators::{BulletproofGens, PedersenGens};
 
