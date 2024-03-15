@@ -14,6 +14,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
+use ark_ff::Field;
 //use clear_on_drop::clear::Clear;
 use core::iter;
 //use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
@@ -25,15 +26,20 @@ use crate::errors::MPCError;
 use crate::generators::{BulletproofGens, PedersenGens};
 use crate::util;
 
+use std::marker::PhantomData;
+
 #[cfg(feature = "std")]
 use rand::thread_rng;
 
 use super::messages::*;
 
 /// Used to construct a party for the aggregated rangeproof MPC protocol.
-pub struct Party<C: AffineRepr> {}
+pub struct Party<C: AffineRepr, F: Field> {
+    _marker: PhantomData<C>,
+    _marker2: PhantomData<F>
+}
 
-impl<C: AffineRepr> Party<C> {
+impl<C: AffineRepr, F: Field> Party<C, F> {
     /// Constructs a `PartyAwaitingPosition` with the given rangeproof parameters.
     pub fn new<'a>(
         bp_gens: &'a BulletproofGens<C>,
@@ -41,7 +47,7 @@ impl<C: AffineRepr> Party<C> {
         v: u64,
         v_blinding: C::ScalarField,
         n: usize,
-    ) -> Result<PartyAwaitingPosition<'a, C>, MPCError> {
+    ) -> Result<PartyAwaitingPosition<'a, C, F>, MPCError> {
         if !(n == 8 || n == 16 || n == 32 || n == 64) {
             return Err(MPCError::InvalidBitsize);
         }
@@ -63,23 +69,24 @@ impl<C: AffineRepr> Party<C> {
 }
 
 /// A party waiting for the dealer to assign their position in the aggregation.
-pub struct PartyAwaitingPosition<'a, C: AffineRepr> {
+pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field> {
     bp_gens: &'a BulletproofGens<C>,
     pc_gens: &'a PedersenGens<C>,
     n: usize,
     v: u64,
     v_blinding: C::ScalarField,
     V: C,
+    _marker: PhantomData<F>
 }
 
-impl<'a, C: AffineRepr> PartyAwaitingPosition<'a, C> {
+impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
     /// Assigns a position in the aggregated proof to this party,
     /// allowing the party to commit to the bits of their value.
     #[cfg(feature = "std")]
     pub fn assign_position(
         self,
         j: usize,
-    ) -> Result<(PartyAwaitingBitChallenge<'a, C>, BitCommitment<C>), MPCError> {
+    ) -> Result<(PartyAwaitingBitChallenge<'a, C, F>, BitCommitment<C>), MPCError> {
         self.assign_position_with_rng(j, &mut thread_rng())
     }
 
@@ -89,7 +96,7 @@ impl<'a, C: AffineRepr> PartyAwaitingPosition<'a, C> {
         self,
         j: usize,
         rng: &mut T,
-    ) -> Result<(PartyAwaitingBitChallenge<'a, C>, BitCommitment<C>), MPCError> {
+    ) -> Result<(PartyAwaitingBitChallenge<'a, C, F>, BitCommitment<C>), MPCError> {
         if self.bp_gens.party_capacity <= j {
             return Err(MPCError::InvalidGeneratorsLength);
         }
@@ -156,7 +163,7 @@ impl<'a, C: AffineRepr> PartyAwaitingPosition<'a, C> {
 
 /// A party which has committed to the bits of its value
 /// and is waiting for the aggregated value challenge from the dealer.
-pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr> {
+pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field> {
     n: usize, // bitsize of the range
     v: u64,
     v_blinding: C::ScalarField,
@@ -168,14 +175,14 @@ pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr> {
     s_R: Vec<C::ScalarField>,
 }
 
-impl<'a, C: AffineRepr> PartyAwaitingBitChallenge<'a, C> {
+impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
     #[cfg(feature = "std")]
     pub fn apply_challenge(
         self,
         vc: &BitChallenge<C>,
-    ) -> (PartyAwaitingPolyChallenge<C>, PolyCommitment<C>) {
+    ) -> (PartyAwaitingPolyChallenge<C, F>, PolyCommitment<C>) {
         self.apply_challenge_with_rng(vc, &mut thread_rng())
     }
 
@@ -185,7 +192,7 @@ impl<'a, C: AffineRepr> PartyAwaitingBitChallenge<'a, C> {
         self,
         vc: &BitChallenge<C>,
         rng: &mut T,
-    ) -> (PartyAwaitingPolyChallenge<C>, PolyCommitment<C>) {
+    ) -> (PartyAwaitingPolyChallenge<C, F>, PolyCommitment<C>) {
         let n = self.n;
         let offset_y = util::scalar_exp_vartime(&vc.y, (self.j * n) as u64);
         let offset_z = util::scalar_exp_vartime(&vc.z, self.j as u64);
@@ -264,11 +271,11 @@ impl<'a, C: AffineRepr> PartyAwaitingBitChallenge<'a, C> {
 
 /// A party which has committed to their polynomial coefficents
 /// and is waiting for the polynomial challenge from the dealer.
-pub struct PartyAwaitingPolyChallenge<C: AffineRepr> {
+pub struct PartyAwaitingPolyChallenge<C: AffineRepr, F: Field> {
     offset_zz: C::ScalarField,
-    l_poly: util::VecPoly1<C>,
-    r_poly: util::VecPoly1<C>,
-    t_poly: util::Poly2<C>,
+    l_poly: util::VecPoly1<F>,
+    r_poly: util::VecPoly1<F>,
+    t_poly: util::Poly2<F>,
     v_blinding: C::ScalarField,
     a_blinding: C::ScalarField,
     s_blinding: C::ScalarField,
@@ -276,7 +283,7 @@ pub struct PartyAwaitingPolyChallenge<C: AffineRepr> {
     t_2_blinding: C::ScalarField,
 }
 
-impl<C: AffineRepr> PartyAwaitingPolyChallenge<C> {
+impl<C: AffineRepr, F: Field> PartyAwaitingPolyChallenge<C, F> {
     /// Receive a [`PolyChallenge`] from the dealer and compute the
     /// party's proof share.
     pub fn apply_challenge(self, pc: &PolyChallenge<C>) -> Result<ProofShare<C>, MPCError> {

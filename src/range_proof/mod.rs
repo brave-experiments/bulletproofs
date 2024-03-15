@@ -11,13 +11,9 @@ use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_ff::Field;
 use ark_serialize::Compress;
-use std::marker::PhantomData;
 
 use core::iter;
 
-//use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-//use curve25519_dalek::scalar::Scalar;
-//use curve25519_dalek::traits::{IsIdentity, VartimeMultiscalarMul};
 use merlin::Transcript;
 
 use crate::errors::ProofError;
@@ -27,7 +23,6 @@ use crate::transcript::TranscriptProtocol;
 use crate::util;
 
 use rand_core::{CryptoRng, RngCore};
-use serde::de::Visitor;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 // Modules for MPC protocol
@@ -449,7 +444,8 @@ impl<C: AffineRepr> Serialize for RangeProof<C> {
     }
 }
 
-impl<'de, C: AffineRepr> Deserialize<'de> for RangeProof<C> {
+// TODO FIX ME
+/*impl<'de, C: AffineRepr> Deserialize<'de> for RangeProof<C> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -480,7 +476,7 @@ impl<'de, C: AffineRepr> Deserialize<'de> for RangeProof<C> {
 
         deserializer.deserialize_bytes(RangeProofVisitor)
     }
-}
+}*/
 
 /// Compute
 /// \\[

@@ -21,6 +21,8 @@ use crate::transcript::TranscriptProtocol;
 
 use rand_core::{CryptoRng, RngCore};
 
+use std::marker::PhantomData;
+
 use crate::util;
 
 #[cfg(feature = "std")]
@@ -29,7 +31,9 @@ use rand::thread_rng;
 use super::messages::*;
 
 /// Used to construct a dealer for the aggregated rangeproof MPC protocol.
-pub struct Dealer<C: AffineRepr> {}
+pub struct Dealer<C: AffineRepr> {
+    _marker: PhantomData<C>
+}
 
 impl<C: AffineRepr> Dealer<C> {
     /// Creates a new dealer coordinating `m` parties proving `n`-bit ranges.
