@@ -173,6 +173,7 @@ pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field> {
     s_blinding: C::ScalarField,
     s_L: Vec<C::ScalarField>,
     s_R: Vec<C::ScalarField>,
+    field: PhantomData<F>,
 }
 
 impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
