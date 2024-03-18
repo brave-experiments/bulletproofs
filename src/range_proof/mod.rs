@@ -23,7 +23,7 @@ use crate::transcript::TranscriptProtocol;
 use crate::util;
 
 use rand_core::{CryptoRng, RngCore};
-use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+use serde::Serialize;
 
 // Modules for MPC protocol
 pub mod dealer;
@@ -53,7 +53,7 @@ pub mod party;
 /// protocol locally.  That API is exposed in the [`aggregation`](::range_proof_mpc)
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RangeProof<C: AffineRepr> {
     /// Commitment to the bits of the value
     A: C,
@@ -434,49 +434,6 @@ impl<C: AffineRepr> RangeProof<C> {
         })
     }
 }
-
-impl<C: AffineRepr> Serialize for RangeProof<C> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.to_bytes()[..])
-    }
-}
-
-// TODO FIX ME
-/*impl<'de, C: AffineRepr> Deserialize<'de> for RangeProof<C> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct RangeProofVisitor;
-
-        impl<'de, C> Visitor<'de> for RangeProofVisitor {
-            type Value = RangeProof<C>;
-
-            fn expecting(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                formatter.write_str("a valid RangeProof")
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<RangeProof<C>, E>
-            where
-                E: serde::de::Error,
-            {
-                // Using Error::custom requires T: Display, which our error
-                // type only implements when it implements std::error::Error.
-                #[cfg(feature = "std")]
-                return RangeProof::from_bytes(v).map_err(serde::de::Error::custom);
-                // In no-std contexts, drop the error message.
-                #[cfg(not(feature = "std"))]
-                return RangeProof::from_bytes(v)
-                    .map_err(|_| serde::de::Error::custom("deserialization error"));
-            }
-        }
-
-        deserializer.deserialize_bytes(RangeProofVisitor)
-    }
-}*/
 
 /// Compute
 /// \\[

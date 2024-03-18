@@ -8,10 +8,9 @@ extern crate alloc;
 
 use crate::util;
 use alloc::vec::Vec;
-use ark_ec::{AffineRepr, VariableBaseMSM};
+use ark_ec::AffineRepr;
 use digest::{ExtendableOutputDirty, Update, XofReader};
-use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::{Deserialize, Serialize};
 use sha3::{Sha3XofReader, Shake256};
 use std::marker::PhantomData;
 
@@ -26,79 +25,12 @@ use std::marker::PhantomData;
 /// * `B`: the `ristretto255` basepoint;
 /// * `B_blinding`: the result of `ristretto255` SHA3-512 // todo
 /// hash-to-group on input `B_bytes`.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct PedersenGens<C: AffineRepr> {
     /// Bases for the committed values.
     pub B: C,
     /// Base for the blinding factor.
     pub B_blinding: C,
-}
-
-impl<C: AffineRepr> PedersenGens<C> {
-    /// Creates a Pedersen commitment using the value scalar and a blinding factor.
-    pub fn commit(&self, value: C::ScalarField, blinding: C::ScalarField) -> C {
-        C::Group::msm_unchecked(&[self.B, self.B_blinding], &[value, blinding]).into()
-    }
-}
-
-impl<C: AffineRepr> Serialize for PedersenGens<C> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("PedersenGens", 2)?;
-        state.serialize_field("B", &self.B)?;
-        state.serialize_field("B_blinding", &self.B_blinding)?;
-        state.end()
-    }
-}
-
-// TODO FIX ME
-/*impl<'de, C> serde::de::Visitor<'de> for dyn Visitor<'de, Value = C> {
-    type Value = PedersenGens<C>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("PedersenGens struct")
-    }
-
-    fn visit_map<M>(self, mut map: M) -> Result<PedersenGens<C>, M::Error>
-    where
-        M: serde::de::MapAccess<'de>,
-    {
-        let mut B = None;
-        let mut B_blinding = None;
-
-        while let Some(key) = map.next_key()? {
-            match key {
-                "B" => {
-                    B = Some(map.next_value()?);
-                }
-                "B_blinding" => {
-                    B_blinding = Some(map.next_value()?);
-                }
-                _ => {
-                    // Ignore unknown fields
-                    let _ = map.next_value::<serde::de::IgnoredAny>();
-                }
-            }
-        }
-
-        let B = B.ok_or_else(|| serde::de::Error::missing_field("B"))?;
-        let B_blinding = B_blinding.ok_or_else(|| serde::de::Error::missing_field("h"))?;
-
-        Ok(PedersenGens { B, B_blinding })
-    }
-}*/
-
-impl<'de, C: AffineRepr> Deserialize<'de> for PedersenGens<C> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct Visitor;
-
-        deserializer.deserialize_struct("PedersenGens", &["B", "B_blinding"], Visitor)
-    }
 }
 
 impl<C: AffineRepr> Default for PedersenGens<C> {
@@ -286,90 +218,6 @@ impl<C: AffineRepr> BulletproofGens<C> {
             party_idx: 0,
             gen_idx: 0,
         }
-    }
-}
-
-impl<C: AffineRepr> Serialize for BulletproofGens<C> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("BulletproofGens", 4)?;
-        state.serialize_field("gens_capacity", &self.gens_capacity)?;
-        state.serialize_field("party_capacity", &self.party_capacity)?;
-        state.serialize_field("G_vec", &self.G_vec)?;
-        state.serialize_field("H_vec", &self.H_vec)?;
-        state.end()
-    }
-}
-
-// TODO FIX ME
-/*impl<'de, C> serde::de::Visitor<'de> for dyn Visitor<'de, Value = C> {
-    type Value = BulletproofGens<C>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("BulletproofGens struct")
-    }
-
-    fn visit_map<M>(self, mut map: M) -> Result<BulletproofGens<C>, M::Error>
-    where
-        M: serde::de::MapAccess<'de>,
-    {
-        let mut gens_capacity = None;
-        let mut party_capacity = None;
-        let mut G_vec = None;
-        let mut H_vec = None;
-
-        while let Some(key) = map.next_key()? {
-            match key {
-                "gens_capacity" => {
-                    gens_capacity = Some(map.next_value()?);
-                }
-                "party_capacity" => {
-                    party_capacity = Some(map.next_value()?);
-                }
-                "G_vec" => {
-                    G_vec = Some(map.next_value()?);
-                }
-                "H_vec" => {
-                    H_vec = Some(map.next_value()?);
-                }
-                _ => {
-                    // Ignore unknown fields
-                    let _ = map.next_value::<serde::de::IgnoredAny>();
-                }
-            }
-        }
-
-        let gens_capacity =
-            gens_capacity.ok_or_else(|| serde::de::Error::missing_field("gens_capacity"))?;
-        let party_capacity =
-            party_capacity.ok_or_else(|| serde::de::Error::missing_field("party_capacity"))?;
-        let G_vec = G_vec.ok_or_else(|| serde::de::Error::missing_field("G_vec"))?;
-        let H_vec = H_vec.ok_or_else(|| serde::de::Error::missing_field("H_vec"))?;
-
-        Ok(BulletproofGens {
-            gens_capacity,
-            party_capacity,
-            G_vec,
-            H_vec,
-        })
-    }
-}*/
-
-impl<'de, C: AffineRepr> Deserialize<'de> for BulletproofGens<C> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-        C: AffineRepr,
-    {
-        struct Visitor;
-
-        deserializer.deserialize_struct(
-            "BulletproofGens",
-            &["gens_capacity", "party_capacity", "G_vec", "H_vec"],
-            Visitor,
-        )
     }
 }
 
