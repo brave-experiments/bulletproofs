@@ -4,6 +4,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
+use ark_std::One;
 
 use core::iter;
 use merlin::Transcript;
