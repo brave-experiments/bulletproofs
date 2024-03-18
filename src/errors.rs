@@ -31,6 +31,14 @@ pub enum ProofError {
         error("Invalid aggregation size, m must be a power of 2.")
     )]
     InvalidAggregation,
+    /// This error occurs when attempting to create a proof
+    /// with mismatched vector argument lengths, or when
+    /// the lengths are not a power of two.
+    #[cfg_attr(
+        feature = "std",
+        error("Input vectors must all the the same length.")
+    )]
+    InvalidInputLength,
     /// This error occurs when there are insufficient generators for the proof.
     #[cfg_attr(
         feature = "std",
