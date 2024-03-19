@@ -323,18 +323,18 @@ impl<C: AffineRepr> LinearProof<C> {
 
     /// Serializes the proof into a byte array of \\(2n+3\\) 32-byte elements.
     /// The layout of the linear proof is:
-    /// * \\(n\\) pairs of compressed Ristretto points \\(L_0, R_0 \dots, L_{n-1}, R_{n-1}\\),
-    /// * one compressed Ristretto point \\(S\\),
+    /// * \\(n\\) pairs of compressed elliptic curve points \\(L_0, R_0 \dots, L_{n-1}, R_{n-1}\\),
+    /// * one compressed point \\(S\\),
     /// * two scalars \\(a, r\\).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.serialized_size());
         for (l, r) in self.L_vec.iter().zip(self.R_vec.iter()) {
-            buf.extend_from_slice(l.as_bytes());
-            buf.extend_from_slice(r.as_bytes());
+            l.serialize_compressed(&mut buf);
+            r.serialize_compressed(&mut buf);
         }
-        buf.extend_from_slice(self.S.as_bytes());
-        buf.extend_from_slice(self.a.as_bytes());
-        buf.extend_from_slice(self.r.as_bytes());
+        self.S.serialize_compressed(&mut buf);
+        self.a.serialize_compressed(&mut buf);
+        self.r.serialize_compressed(&mut buf);
         buf
     }
 

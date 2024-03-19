@@ -10,7 +10,7 @@ use self::rand::thread_rng;
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_ff::Field;
-use ark_serialize::Compress;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_std::One;
 
 use core::iter;
@@ -384,14 +384,14 @@ impl<C: AffineRepr> RangeProof<C> {
     pub fn to_bytes(&self) -> Vec<u8> {
         // 7 elements: points A, S, T1, T2, scalars tx, tx_bl, e_bl.
         let mut buf = Vec::with_capacity(7 * 32 + self.ipp_proof.serialized_size(Compress::Yes));
-        buf.extend_from_slice(self.A.as_bytes());
-        buf.extend_from_slice(self.S.as_bytes());
-        buf.extend_from_slice(self.T_1.as_bytes());
-        buf.extend_from_slice(self.T_2.as_bytes());
-        buf.extend_from_slice(self.t_x.as_bytes());
-        buf.extend_from_slice(self.t_x_blinding.as_bytes());
-        buf.extend_from_slice(self.e_blinding.as_bytes());
-        buf.extend(self.ipp_proof.to_bytes_iter());
+        self.A.serialize_compressed(&mut buf);
+        self.S.serialize_compressed(&mut buf);
+        self.T_1.serialize_compressed(&mut buf);
+        self.T_2.serialize_compressed(&mut buf);
+        CanonicalSerialize::serialize_compressed(&self.t_x, &mut buf);
+        CanonicalSerialize::serialize_compressed(&self.t_x_blinding, &mut buf);
+        CanonicalSerialize::serialize_compressed(&self.e_blinding, &mut buf);
+        self.ipp_proof.serialize_compressed(&mut buf);
         buf
     }
 
@@ -414,14 +414,15 @@ impl<C: AffineRepr> RangeProof<C> {
         let T_1 = affine_from_bytes_tai::<C>(&read32(&slice[2 * 32..]));
         let T_2 = affine_from_bytes_tai::<C>(&read32(&slice[3 * 32..]));
 
-        let t_x = C::ScalarField::from_canonical_bytes(read32(&slice[4 * 32..]))
+        let t_x = C::ScalarField::from_random_bytes(&read32(&slice[4 * 32..]))
             .ok_or(ProofError::FormatError)?;
-        let t_x_blinding = C::ScalarField::from_canonical_bytes(read32(&slice[5 * 32..]))
+        let t_x_blinding = C::ScalarField::from_random_bytes(&read32(&slice[5 * 32..]))
             .ok_or(ProofError::FormatError)?;
-        let e_blinding = C::ScalarField::from_canonical_bytes(read32(&slice[6 * 32..]))
+        let e_blinding = C::ScalarField::from_random_bytes(&read32(&slice[6 * 32..]))
             .ok_or(ProofError::FormatError)?;
 
-        let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
+        let ipp_proof = InnerProductProof::deserialize_compressed(&slice[7 * 32..])
+            .map_err(|_| ProofError::FormatError)?;
 
         Ok(RangeProof {
             A,
