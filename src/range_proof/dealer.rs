@@ -11,6 +11,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
+use ark_std::One;
 use merlin::Transcript;
 
 use crate::errors::MPCError;
@@ -32,7 +33,7 @@ use super::messages::*;
 
 /// Used to construct a dealer for the aggregated rangeproof MPC protocol.
 pub struct Dealer<C: AffineRepr> {
-    _marker: PhantomData<C>
+    _marker: PhantomData<C>,
 }
 
 impl<C: AffineRepr> Dealer<C> {

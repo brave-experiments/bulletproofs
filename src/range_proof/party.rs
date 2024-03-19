@@ -15,6 +15,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_ff::Field;
+use ark_std::{One, Zero};
 //use clear_on_drop::clear::Clear;
 use core::iter;
 //use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
@@ -36,7 +37,7 @@ use super::messages::*;
 /// Used to construct a party for the aggregated rangeproof MPC protocol.
 pub struct Party<C: AffineRepr, F: Field> {
     _marker: PhantomData<C>,
-    _marker2: PhantomData<F>
+    _marker2: PhantomData<F>,
 }
 
 impl<C: AffineRepr, F: Field> Party<C, F> {
@@ -76,7 +77,7 @@ pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field> {
     v: u64,
     v_blinding: C::ScalarField,
     V: C,
-    _marker: PhantomData<F>
+    _marker: PhantomData<F>,
 }
 
 impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {

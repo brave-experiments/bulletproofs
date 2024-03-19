@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_ff::Field;
 use ark_serialize::Compress;
+use ark_std::One;
 
 use core::iter;
 
