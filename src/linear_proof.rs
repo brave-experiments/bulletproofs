@@ -4,7 +4,9 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_std::One;
+use ark_ff::PrimeField;
+use ark_serialize::CanonicalSerialize;
+use ark_std::{One, UniformRand};
 
 use core::iter;
 use merlin::Transcript;
@@ -69,15 +71,15 @@ impl<C: AffineRepr> LinearProof<C> {
 
         // Append all public data to the transcript
         transcript.innerproduct_domain_sep(n as u64);
-        transcript.append_point(b"C", &C);
+        transcript.append_point(b"C", C);
         for b_i in &b_vec {
             transcript.append_scalar(b"b_i", b_i);
         }
         for G_i in &G_vec {
-            transcript.append_point(b"G_i", &G_i.compress());
+            transcript.append_point(b"G_i", G_i);
         }
-        transcript.append_point(b"F", &F.compress());
-        transcript.append_point(b"B", &B.compress());
+        transcript.append_point(b"F", F);
+        transcript.append_point(b"B", B);
 
         // Create slices G, H, a, b backed by their respective
         // vectors. This lets us reslice as we compress the lengths
@@ -119,8 +121,8 @@ impl<C: AffineRepr> LinearProof<C> {
             L_vec.push(L);
             R_vec.push(R);
 
-            transcript.append_point(b"L", &L);
-            transcript.append_point(b"R", &R);
+            transcript.append_point(b"L", L);
+            transcript.append_point(b"R", R);
 
             let x_j = transcript.challenge_scalar(b"x_j");
             let x_j_inv = x_j.invert();
@@ -143,7 +145,7 @@ impl<C: AffineRepr> LinearProof<C> {
         let s_star = C::ScalarField::random(rng);
         let t_star = C::ScalarField::random(rng);
         let S = (t_star * B + s_star * b[0] * F + s_star * G[0]).compress();
-        transcript.append_point(b"S", &S);
+        transcript.append_point(b"S", S);
 
         let x_star = transcript.challenge_scalar(b"x_star");
         let a_star = s_star + x_star * a[0];
@@ -180,15 +182,15 @@ impl<C: AffineRepr> LinearProof<C> {
 
         // Append all public data to the transcript
         transcript.innerproduct_domain_sep(n as u64);
-        transcript.append_point(b"C", &C);
+        transcript.append_point(b"C", C);
         for b_i in &b_vec {
             transcript.append_scalar(b"b_i", b_i);
         }
         for G_i in G {
-            transcript.append_point(b"G_i", &G_i.compress());
+            transcript.append_point(b"G_i", G_i);
         }
-        transcript.append_point(b"F", &F.compress());
-        transcript.append_point(b"B", &B.compress());
+        transcript.append_point(b"F", F);
+        transcript.append_point(b"B", B);
 
         let (x_vec, x_inv_vec, b_0) = self.verification_scalars(n, transcript, b_vec)?;
         transcript.append_point(b"S", &self.S);
@@ -390,10 +392,8 @@ impl<C: AffineRepr> LinearProof<C> {
 
         let pos = 2 * lg_n * 32;
         let S = affine_from_bytes_tai::<C>(&read32(&slice[pos..]));
-        let a = C::ScalarField::from_canonical_bytes(read32(&slice[pos + 32..]))
-            .ok_or(ProofError::FormatError)?;
-        let r = C::ScalarField::from_canonical_bytes(read32(&slice[pos + 64..]))
-            .ok_or(ProofError::FormatError)?;
+        let a = C::ScalarField::from_le_bytes_mod_order(&read32(&slice[pos + 32..]));
+        let r = C::ScalarField::from_le_bytes_mod_order(&read32(&slice[pos + 64..]));
 
         Ok(LinearProof {
             L_vec,
