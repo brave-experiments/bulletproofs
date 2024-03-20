@@ -442,7 +442,7 @@ fn delta<S: Field>(n: usize, m: usize, y: &S, z: &S) -> S {
     let sum_2 = util::sum_of_powers(&S::from(2u64), n);
     let sum_z = util::sum_of_powers(z, m);
 
-    (z - z * z) * sum_y - z * z * z * sum_2 * sum_z
+    ((*z) - (*z) * z) * sum_y - (*z) * z * z * sum_2 * sum_z
 }
 
 #[cfg(test)]
