@@ -6,11 +6,11 @@ use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
+use ark_std::rand::RngCore;
 use ark_std::{One, UniformRand};
 
 use core::iter;
 use merlin::Transcript;
-use rand_core::{CryptoRng, RngCore};
 
 use crate::errors::ProofError;
 use crate::inner_product_proof::inner_product;
@@ -38,7 +38,7 @@ impl<C: AffineRepr> LinearProof<C> {
     ///
     /// The lengths of the vectors must all be the same, and must all be either 0 or a power of 2.
     /// The proof is created with respect to the bases \\(G\\).
-    pub fn create<T: RngCore + CryptoRng>(
+    pub fn create<T: UniformRand + RngCore>(
         transcript: &mut Transcript,
         rng: &mut T,
         // Commitment to witness
@@ -101,8 +101,8 @@ impl<C: AffineRepr> LinearProof<C> {
             let c_L = inner_product(&a_L, &b_R);
             let c_R = inner_product(&a_R, &b_L);
 
-            let s_j = C::ScalarField::random(rng);
-            let t_j = C::ScalarField::random(rng);
+            let s_j = C::ScalarField::rand(&mut rng);
+            let t_j = C::ScalarField::rand(&mut rng);
 
             // L = a_L * G_R + s_j * B + c_L * F
             let L = C::vartime_multiscalar_mul(
@@ -142,8 +142,8 @@ impl<C: AffineRepr> LinearProof<C> {
             r = r + x_j * s_j + x_j_inv * t_j;
         }
 
-        let s_star = C::ScalarField::random(rng);
-        let t_star = C::ScalarField::random(rng);
+        let s_star = C::ScalarField::rand(&mut rng);
+        let t_star = C::ScalarField::rand(&mut rng);
         let S = (t_star * B + s_star * b[0] * F + s_star * G[0]).compress();
         transcript.append_point(b"S", S);
 

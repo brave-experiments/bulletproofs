@@ -2,15 +2,12 @@
 #![doc = include_str!("../../docs/range-proof-protocol.md")]
 
 extern crate alloc;
-#[cfg(feature = "std")]
-extern crate rand;
 
-#[cfg(feature = "std")]
-use self::rand::thread_rng;
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
+use ark_ff::{Field, UniformRand};
+use ark_std::rand::{prelude::thread_rng, RngCore};
 use ark_std::One;
 
 use core::iter;
@@ -23,7 +20,6 @@ use crate::inner_product_proof::InnerProductProof;
 use crate::transcript::TranscriptProtocol;
 use crate::util;
 
-use rand_core::{CryptoRng, RngCore};
 use serde::Serialize;
 
 // Modules for MPC protocol
@@ -103,7 +99,7 @@ impl<C: AffineRepr> RangeProof<C> {
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_multiple`].
     /// ```
-    pub fn prove_single_with_rng<T: RngCore + CryptoRng>(
+    pub fn prove_single_with_rng<T: RngCore + UniformRand>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
@@ -125,7 +121,7 @@ impl<C: AffineRepr> RangeProof<C> {
     }
 
     /// Create a rangeproof for a set of values.
-    pub fn prove_multiple_with_rng<T: RngCore + CryptoRng>(
+    pub fn prove_multiple_with_rng<T: RngCore + UniformRand>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
@@ -209,7 +205,7 @@ impl<C: AffineRepr> RangeProof<C> {
     ///
     /// This is a convenience wrapper around [`RangeProof::verify_single_with_rng`],
     /// passing in a threadsafe RNG.
-    #[cfg(feature = "std")]
+    //#[cfg(feature = "std")]
     pub fn verify_single(
         &self,
         bp_gens: &BulletproofGens<C>,
@@ -224,7 +220,7 @@ impl<C: AffineRepr> RangeProof<C> {
     /// Verifies a rangeproof for a given value commitment \\(V\\).
     ///
     /// This is a convenience wrapper around `verify_multiple` for the `m=1` case.
-    pub fn verify_single_with_rng<T: RngCore + CryptoRng>(
+    pub fn verify_single_with_rng<T: RngCore + UniformRand>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
@@ -237,7 +233,7 @@ impl<C: AffineRepr> RangeProof<C> {
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
-    pub fn verify_multiple_with_rng<T: RngCore + CryptoRng>(
+    pub fn verify_multiple_with_rng<T: RngCore + UniformRand>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
@@ -288,7 +284,7 @@ impl<C: AffineRepr> RangeProof<C> {
         let w = transcript.challenge_scalar(b"w");
 
         // Challenge value for batching statements to be verified
-        let c = C::ScalarField::random(rng);
+        let c = C::ScalarField::rand(&mut rng);
 
         let (x_sq, x_inv_sq, s) = self.ipp_proof.verification_scalars(n * m, transcript)?;
         let s_inv = s.iter().rev();

@@ -14,23 +14,16 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_ff::Field;
+use ark_ff::{Field, UniformRand};
+use ark_std::rand::RngCore;
 use ark_std::{One, Zero};
-//use clear_on_drop::clear::Clear;
 use core::iter;
-//use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-//use curve25519_dalek::scalar::Scalar;
-//use curve25519_dalek::traits::MultiscalarMul;
-use rand_core::{CryptoRng, RngCore};
 
 use crate::errors::MPCError;
 use crate::generators::{BulletproofGens, PedersenGens};
 use crate::util;
 
 use std::marker::PhantomData;
-
-#[cfg(feature = "std")]
-use rand::thread_rng;
 
 use super::messages::*;
 
@@ -88,12 +81,12 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
         self,
         j: usize,
     ) -> Result<(PartyAwaitingBitChallenge<'a, C, F>, BitCommitment<C>), MPCError> {
-        self.assign_position_with_rng(j, &mut thread_rng())
+        self.assign_position_with_rng(j, &mut rand::thread_rng())
     }
 
     /// Assigns a position in the aggregated proof to this party,
     /// allowing the party to commit to the bits of their value.
-    pub fn assign_position_with_rng<T: RngCore + CryptoRng>(
+    pub fn assign_position_with_rng<T: RngCore + UniformRand>(
         self,
         j: usize,
         rng: &mut T,
@@ -104,7 +97,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
 
         let bp_share = self.bp_gens.share(j);
 
-        let a_blinding = C::ScalarField::random(rng);
+        let a_blinding = C::ScalarField::rand(&mut rng);
         // Compute A = <a_L, G> + <a_R, H> + a_blinding * B_blinding
         let mut A = self.pc_gens.B_blinding * a_blinding;
 
@@ -119,9 +112,13 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
             i += 1;
         }
 
-        let s_blinding = C::ScalarField::random(rng);
-        let s_L: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::random(rng)).collect();
-        let s_R: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::random(rng)).collect();
+        let s_blinding = C::ScalarField::rand(&mut rng);
+        let s_L: Vec<C::ScalarField> = (0..self.n)
+            .map(|_| C::ScalarField::rand(&mut rng))
+            .collect();
+        let s_R: Vec<C::ScalarField> = (0..self.n)
+            .map(|_| C::ScalarField::rand(&mut rng))
+            .collect();
 
         // Compute S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
         let S = C::multiscalar_mul(
@@ -184,12 +181,12 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
         self,
         vc: &BitChallenge<C>,
     ) -> (PartyAwaitingPolyChallenge<C, F>, PolyCommitment<C>) {
-        self.apply_challenge_with_rng(vc, &mut thread_rng())
+        self.apply_challenge_with_rng(vc, &mut rand::thread_rng())
     }
 
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
-    pub fn apply_challenge_with_rng<T: RngCore + CryptoRng>(
+    pub fn apply_challenge_with_rng<T: RngCore + UniformRand>(
         self,
         vc: &BitChallenge<C>,
         rng: &mut T,
@@ -221,8 +218,8 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
         let t_poly = l_poly.inner_product(&r_poly);
 
         // Generate x by committing to T_1, T_2 (line 49-54)
-        let t_1_blinding = C::ScalarField::random(rng);
-        let t_2_blinding = C::ScalarField::random(rng);
+        let t_1_blinding = C::ScalarField::rand(&mut rng);
+        let t_2_blinding = C::ScalarField::rand(&mut rng);
         let T_1 = self.pc_gens.commit(t_poly.1, t_1_blinding);
         let T_2 = self.pc_gens.commit(t_poly.2, t_2_blinding);
 

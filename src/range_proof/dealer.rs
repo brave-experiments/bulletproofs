@@ -11,7 +11,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
-use ark_std::One;
+use ark_std::rand::RngCore;
+use ark_std::{One, UniformRand};
 use merlin::Transcript;
 
 use crate::errors::MPCError;
@@ -20,14 +21,9 @@ use crate::inner_product_proof;
 use crate::range_proof::RangeProof;
 use crate::transcript::TranscriptProtocol;
 
-use rand_core::{CryptoRng, RngCore};
-
 use std::marker::PhantomData;
 
 use crate::util;
-
-#[cfg(feature = "std")]
-use rand::thread_rng;
 
 use super::messages::*;
 
@@ -309,7 +305,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     ///
     #[cfg(feature = "std")]
     pub fn receive_shares(self, proof_shares: &[ProofShare<C>]) -> Result<RangeProof<C>, MPCError> {
-        self.receive_shares_with_rng(proof_shares, &mut thread_rng())
+        self.receive_shares_with_rng(proof_shares, &mut rand::thread_rng())
     }
 
     /// Assemble the final aggregated [`RangeProof`] from the given
@@ -325,7 +321,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     /// performing local aggregation,
     /// [`receive_trusted_shares`](DealerAwaitingProofShares::receive_trusted_shares)
     /// saves time by skipping verification of the aggregated proof.
-    pub fn receive_shares_with_rng<T: RngCore + CryptoRng>(
+    pub fn receive_shares_with_rng<T: UniformRand + RngCore>(
         mut self,
         proof_shares: &[ProofShare<C>],
         rng: &mut T,

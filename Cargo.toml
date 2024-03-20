@@ -16,8 +16,7 @@ edition = "2018"
 subtle = { version = "2", default-features = false }
 sha3 = { version = "0.9.1", default-features = false }
 digest = { version = "0.9.0", default-features = false }
-rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-rand = { version = "0.8", default-features = false, optional = true }
+rand = { version = "0.8" }
 byteorder = { version = "1", default-features = false }
 serde = { version = "1", features = [ "derive" ] }
 serde_json = "1.0"
@@ -25,8 +24,8 @@ thiserror = { version = "1", optional = true }
 merlin = { version = "2", default-features = false }
 ark-ec = { version = "0.4.0"}
 ark-ff = { version = "0.4.0"}
-ark-serialize = { version = "0.4.0" } 
-ark-std = { version = "0.4.0" } 
+ark-serialize = { version = "0.4.0" }
+ark-std = { version = "0.4.0" }
 rust-crypto = "^0.2"
 rayon = {version = "1.5.3", optional = true}
 zeroize = { version = "1", features = ["zeroize_derive"] }
@@ -39,7 +38,7 @@ ark-vesta = "0.4.0"
 
 [features]
 default = ["std", "parallel", "asm"]
-std = ["rand", "rand/std", "thiserror"]
+std = ["thiserror"]
 asm = ["ark-ff/asm"]
 parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "rayon"]
 
