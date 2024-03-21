@@ -49,7 +49,7 @@ impl<C: AffineRepr, F: Field> Party<C, F> {
             return Err(MPCError::InvalidGeneratorsLength);
         }
 
-        let V = pc_gens.commit(v.into(), v_blinding).compress();
+        let V = pc_gens.commit(v.into(), v_blinding);
 
         Ok(PartyAwaitingPosition {
             bp_gens,

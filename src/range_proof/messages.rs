@@ -142,8 +142,6 @@ impl<C: AffineRepr> ProofShare<C> {
             return Err(());
         }
 
-        let V_j = bit_commitment.V_j.decompress().ok_or(())?;
-
         let sum_of_powers_y = util::sum_of_powers(&y, n);
         let sum_of_powers_2 = util::sum_of_powers(&C::ScalarField::from(2u64), n);
         let delta = (z - zz) * sum_of_powers_y * y_jn - z * zz * sum_of_powers_2 * z_j;
@@ -153,7 +151,7 @@ impl<C: AffineRepr> ProofShare<C> {
                 .chain(iter::once(x * x))
                 .chain(iter::once(delta - self.t_x))
                 .chain(iter::once(-self.t_x_blinding)),
-            iter::once(&V_j)
+            iter::once(&bit_commitment.V_j)
                 .chain(iter::once(&poly_commitment.T_1_j))
                 .chain(iter::once(&poly_commitment.T_2_j))
                 .chain(iter::once(&pc_gens.B))

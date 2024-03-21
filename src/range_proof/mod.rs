@@ -324,17 +324,17 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
                 .chain(g)
                 .chain(h)
                 .chain(value_commitment_scalars),
-            iter::once(self.A.decompress())
-                .chain(iter::once(self.S.decompress()))
-                .chain(iter::once(self.T_1.decompress()))
-                .chain(iter::once(self.T_2.decompress()))
-                .chain(self.ipp_proof.L_vec.iter().map(|L| L.decompress()))
-                .chain(self.ipp_proof.R_vec.iter().map(|R| R.decompress()))
+            iter::once(self.A)
+                .chain(iter::once(self.S))
+                .chain(iter::once(self.T_1))
+                .chain(iter::once(self.T_2))
+                .chain(self.ipp_proof.L_vec.iter().map(|L| L.clone()))
+                .chain(self.ipp_proof.R_vec.iter().map(|R| R.clone()))
                 .chain(iter::once(Some(pc_gens.B_blinding)))
                 .chain(iter::once(Some(pc_gens.B)))
                 .chain(bp_gens.G(n, m).map(|&x| Some(x)))
                 .chain(bp_gens.H(n, m).map(|&x| Some(x)))
-                .chain(value_commitments.iter().map(|V| V.decompress())),
+                .chain(value_commitments.iter().map(|V| V.clone())),
         )
         .ok_or_else(|| ProofError::VerificationError)?;
 

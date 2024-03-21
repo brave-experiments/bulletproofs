@@ -114,10 +114,10 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F>
 
         // Commit aggregated A_j, S_j
         let A: C = bit_commitments.iter().map(|vc| vc.A_j).sum();
-        self.transcript.append_point(b"A", &A.compress());
+        self.transcript.append_point(b"A", &A);
 
         let S: C = bit_commitments.iter().map(|vc| vc.S_j).sum();
-        self.transcript.append_point(b"S", &S.compress());
+        self.transcript.append_point(b"S", &S);
 
         let y = self.transcript.challenge_scalar(b"y");
         let z = self.transcript.challenge_scalar(b"z");
@@ -175,8 +175,8 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F
         let T_1: C = poly_commitments.iter().map(|pc| pc.T_1_j).sum();
         let T_2: C = poly_commitments.iter().map(|pc| pc.T_2_j).sum();
 
-        self.transcript.append_point(b"T_1", &T_1.compress());
-        self.transcript.append_point(b"T_2", &T_2.compress());
+        self.transcript.append_point(b"T_1", &T_1);
+        self.transcript.append_point(b"T_2", &T_2);
 
         let x = self.transcript.challenge_scalar(b"x");
         let poly_challenge = PolyChallenge { x };
@@ -294,14 +294,15 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
         );
 
         Ok(RangeProof {
-            A: self.A.compress(),
-            S: self.S.compress(),
-            T_1: self.T_1.compress(),
-            T_2: self.T_2.compress(),
+            A: self.A,
+            S: self.S,
+            T_1: self.T_1,
+            T_2: self.T_2,
             t_x,
             t_x_blinding,
             e_blinding,
             ipp_proof,
+            _marker_f: PhantomData,
         })
     }
 

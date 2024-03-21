@@ -105,18 +105,16 @@ impl<C: AffineRepr> LinearProof<C> {
             let t_j = C::ScalarField::rand(&mut rng);
 
             // L = a_L * G_R + s_j * B + c_L * F
-            let L = C::vartime_multiscalar_mul(
+            let L: C = C::vartime_multiscalar_mul(
                 a_L.iter().chain(iter::once(&s_j)).chain(iter::once(&c_L)),
                 G_R.iter().chain(iter::once(B)).chain(iter::once(F)),
-            )
-            .compress();
+            );
 
             // R = a_R * G_L + t_j * B + c_R * F
-            let R = C::vartime_multiscalar_mul(
+            let R: C = C::vartime_multiscalar_mul(
                 a_R.iter().chain(iter::once(&t_j)).chain(iter::once(&c_R)),
                 G_L.iter().chain(iter::once(B)).chain(iter::once(F)),
-            )
-            .compress();
+            );
 
             L_vec.push(L);
             R_vec.push(R);
@@ -144,8 +142,8 @@ impl<C: AffineRepr> LinearProof<C> {
 
         let s_star = C::ScalarField::rand(&mut rng);
         let t_star = C::ScalarField::rand(&mut rng);
-        let S = (t_star * B + s_star * b[0] * F + s_star * G[0]).compress();
-        transcript.append_point(b"S", S);
+        let S: C = t_star * B + s_star * b[0] * F + s_star * G[0];
+        transcript.append_point(b"S", &S);
 
         let x_star = transcript.challenge_scalar(b"x_star");
         let a_star = s_star + x_star * a[0];
@@ -196,36 +194,19 @@ impl<C: AffineRepr> LinearProof<C> {
         transcript.append_point(b"S", &self.S);
         let x_star = transcript.challenge_scalar(b"x_star");
 
-        // Decompress the compressed L values
-        let Ls = self
-            .L_vec
-            .iter()
-            .map(|p| p.decompress().ok_or(ProofError::VerificationError))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Decompress the compressed R values
-        let Rs = self
-            .R_vec
-            .iter()
-            .map(|p| p.decompress().ok_or(ProofError::VerificationError))
-            .collect::<Result<Vec<_>, _>>()?;
-
         // L_R_factors = sum_{j=0}^{l-1} (x_j * L_j + x_j^{-1} * R_j)
         //
         // Note: in GHL'21 the verification equation is incorrect (as of 05/03/22), with x_j and x_j^{-1} reversed.
         // (Incorrect paper equation: sum_{j=0}^{l-1} (x_j^{-1} * L_j + x_j * R_j) )
         let L_R_factors: C = C::vartime_multiscalar_mul(
             x_vec.iter().chain(x_inv_vec.iter()),
-            Ls.iter().chain(Rs.iter()),
+            self.L_vec.iter().chain(self.R_vec.iter()),
         );
 
         // This is an optimized way to compute the base case G (G_0 in the paper):
         // G_0 = sum_{i=0}^{2^{l-1}} (x<i> * G_i)
         let s = self.subset_product(n, x_vec);
         let G_0: C = C::vartime_multiscalar_mul(s.iter(), G.iter());
-
-        let S = self.S.decompress().ok_or(ProofError::VerificationError)?;
-        let C = C.decompress().ok_or(ProofError::VerificationError)?;
 
         // This matches the verification equation:
         // S == r_star * B + a_star * b_0 * F
@@ -236,7 +217,7 @@ impl<C: AffineRepr> LinearProof<C> {
         // and G_0 = sum_{i=0}^{2^{l-1}} (x<i> * G_i)
         let expect_S = self.r * B + self.a * b_0 * F - x_star * (C + L_R_factors) + self.a * G_0;
 
-        if expect_S == S {
+        if expect_S == self.S {
             Ok(())
         } else {
             Err(ProofError::VerificationError)
