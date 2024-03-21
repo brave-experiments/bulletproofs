@@ -3,13 +3,12 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use ark_ec::AffineRepr;
-use ark_ff::PrimeField;
+use ark_ec::{AffineRepr, VariableBaseMSM};
+use ark_ff::{Field, PrimeField};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
 use ark_std::{One, UniformRand};
 
-use core::iter;
 use merlin::Transcript;
 
 use crate::errors::ProofError;
@@ -105,25 +104,23 @@ impl<C: AffineRepr> LinearProof<C> {
             let t_j = C::ScalarField::rand(rng);
 
             // L = a_L * G_R + s_j * B + c_L * F
-            let L: C = C::vartime_multiscalar_mul(
-                a_L.iter().chain(iter::once(&s_j)).chain(iter::once(&c_L)),
-                G_R.iter().chain(iter::once(B)).chain(iter::once(F)),
-            );
+            let L = C::Group::msm(G_R, a_L).unwrap()
+                + (*B) * s_j
+                + (*F) * c_L;
 
             // R = a_R * G_L + t_j * B + c_R * F
-            let R: C = C::vartime_multiscalar_mul(
-                a_R.iter().chain(iter::once(&t_j)).chain(iter::once(&c_R)),
-                G_L.iter().chain(iter::once(B)).chain(iter::once(F)),
-            );
+            let R = C::Group::msm(G_L, a_R).unwrap()
+                + (*B) * t_j
+                + (*F) * c_R;
 
-            L_vec.push(L);
-            R_vec.push(R);
+            L_vec.push(L.into());
+            R_vec.push(R.into());
 
-            transcript.append_point(b"L", L);
-            transcript.append_point(b"R", R);
+            transcript.append_point(b"L", &L.into());
+            transcript.append_point(b"R", &R.into());
 
-            let x_j = transcript.challenge_scalar(b"x_j");
-            let x_j_inv = x_j.invert();
+            let x_j = transcript.challenge_scalar::<C>(b"x_j");
+            let x_j_inv = x_j.inverse().unwrap();
 
             for i in 0..n {
                 // a_L = a_L + x_j^{-1} * a_R
@@ -131,8 +128,7 @@ impl<C: AffineRepr> LinearProof<C> {
                 // b_L = b_L + x_j * b_R
                 b_L[i] = b_L[i] + x_j * b_R[i];
                 // G_L = G_L + x_j * G_R
-                G_L[i] =
-                    C::vartime_multiscalar_mul(&[C::ScalarField::one(), x_j], &[G_L[i], G_R[i]]);
+                G_L[i] = (G_L[i] + G_R[i] * x_j).into();
             }
             a = a_L;
             b = b_L;
@@ -193,21 +189,19 @@ impl<C: AffineRepr> LinearProof<C> {
 
         let (x_vec, x_inv_vec, b_0) = self.verification_scalars(n, transcript, b_vec)?;
         transcript.append_point(b"S", &self.S);
-        let x_star = transcript.challenge_scalar(b"x_star");
+        let x_star = transcript.challenge_scalar::<C>(b"x_star");
 
         // L_R_factors = sum_{j=0}^{l-1} (x_j * L_j + x_j^{-1} * R_j)
         //
         // Note: in GHL'21 the verification equation is incorrect (as of 05/03/22), with x_j and x_j^{-1} reversed.
         // (Incorrect paper equation: sum_{j=0}^{l-1} (x_j^{-1} * L_j + x_j * R_j) )
-        let L_R_factors: C = C::vartime_multiscalar_mul(
-            x_vec.iter().chain(x_inv_vec.iter()),
-            self.L_vec.iter().chain(self.R_vec.iter()),
-        );
+        let L_R_factors = C::Group::msm(&self.L_vec, &x_vec).unwrap()
+            + C::Group::msm(&self.R_vec, &x_inv_vec).unwrap();
 
         // This is an optimized way to compute the base case G (G_0 in the paper):
         // G_0 = sum_{i=0}^{2^{l-1}} (x<i> * G_i)
         let s = self.subset_product(n, x_vec);
-        let G_0: C = C::vartime_multiscalar_mul(s.iter(), G.iter());
+        let G_0 = C::Group::msm(&G, &s).unwrap();
 
         // This matches the verification equation:
         // S == r_star * B + a_star * b_0 * F
@@ -265,8 +259,10 @@ impl<C: AffineRepr> LinearProof<C> {
         }
 
         // 3. Compute the challenge inverses: 1/x_k, ..., 1/x_1
-        let mut challenges_inv = challenges.clone();
-        C::ScalarField::batch_invert(&mut challenges_inv);
+        let challenges_inv = challenges
+            .iter()
+            .map(|x| x.inverse().unwrap())
+            .collect();
 
         Ok((challenges, challenges_inv, b[0]))
     }
