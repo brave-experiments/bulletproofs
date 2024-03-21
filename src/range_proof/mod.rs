@@ -268,7 +268,7 @@ impl<C: AffineRepr> RangeProof<C> {
         transcript.validate_and_append_point(b"S", &self.S)?;
 
         let y = transcript.challenge_scalar(b"y");
-        let z = transcript.challenge_scalar(b"z");
+        let z: C::ScalarField = transcript.challenge_scalar(b"z");
         let zz = z * z;
         let minus_z = -z;
 
