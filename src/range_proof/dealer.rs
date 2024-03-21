@@ -313,7 +313,10 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
     /// This is a convenience wrapper around receive_shares_with_rng
     ///
     #[cfg(feature = "std")]
-    pub fn receive_shares(self, proof_shares: &[ProofShare<C>]) -> Result<RangeProof<C, F>, MPCError> {
+    pub fn receive_shares(
+        self,
+        proof_shares: &[ProofShare<C>],
+    ) -> Result<RangeProof<C, F>, MPCError> {
         self.receive_shares_with_rng(proof_shares, &mut rand::thread_rng())
     }
 

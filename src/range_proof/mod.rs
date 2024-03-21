@@ -5,8 +5,8 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_ff::{Field, UniformRand};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_std::rand::{prelude::thread_rng, RngCore};
 use ark_std::One;
 
