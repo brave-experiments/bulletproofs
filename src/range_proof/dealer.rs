@@ -112,11 +112,14 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F>
             self.transcript.append_point(b"V", &vc.V_j);
         }
 
-        // Commit aggregated A_j, S_j
-        let A: C = bit_commitments.iter().map(|vc| vc.A_j).sum();
+        // Commit aggregated A_j, S_j sums
+        let mut A = bit_commitments[0].A_j;
+        let mut S = bit_commitments[0].S_j;
+        for vc in &bit_commitments[1..] {
+            A = (A + vc.A_j).into();
+            S = (S + vc.S_j).into();
+        }
         self.transcript.append_point(b"A", &A);
-
-        let S: C = bit_commitments.iter().map(|vc| vc.S_j).sum();
         self.transcript.append_point(b"S", &S);
 
         let y = self.transcript.challenge_scalar(b"y");
@@ -172,9 +175,12 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F
         }
 
         // Commit sums of T_1_j's and T_2_j's
-        let T_1: C = poly_commitments.iter().map(|pc| pc.T_1_j).sum();
-        let T_2: C = poly_commitments.iter().map(|pc| pc.T_2_j).sum();
-
+        let mut T_1 = poly_commitments[0].T_1_j;
+        let mut T_2 = poly_commitments[0].T_2_j;
+        for pc in &poly_commitments[1..] {
+            T_1 = (T_1 + pc.T_1_j).into();
+            T_2 = (T_1 + pc.T_2_j).into();
+        }
         self.transcript.append_point(b"T_1", &T_1);
         self.transcript.append_point(b"T_2", &T_2);
 
@@ -253,10 +259,14 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
             return Err(MPCError::MalformedProofShares { bad_shares });
         }
 
-        let t_x: C::ScalarField = proof_shares.iter().map(|ps| ps.t_x).sum();
-        let t_x_blinding: C::ScalarField = proof_shares.iter().map(|ps| ps.t_x_blinding).sum();
-        let e_blinding: C::ScalarField = proof_shares.iter().map(|ps| ps.e_blinding).sum();
-
+        let mut t_x = proof_shares[0].t_x;
+        let mut t_x_blinding = proof_shares[0].t_x_blinding;
+        let mut e_blinding = proof_shares[0].e_blinding;
+        for ps in &proof_shares[1..] {
+            t_x = t_x + ps.t_x;
+            t_x_blinding = t_x_blinding + ps.t_x_blinding;
+            e_blinding += e_blinding + ps.e_blinding;
+        }
         self.transcript.append_scalar(b"t_x", &t_x);
         self.transcript
             .append_scalar(b"t_x_blinding", &t_x_blinding);
