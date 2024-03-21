@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use ark_ec::AffineRepr;
 use ark_std::One;
 use core::iter;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::generators::{BulletproofGens, PedersenGens};
 
