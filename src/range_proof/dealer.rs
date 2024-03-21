@@ -11,6 +11,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
+use ark_ff::Field;
 use ark_std::rand::RngCore;
 use ark_std::{One, UniformRand};
 use merlin::Transcript;
@@ -28,11 +29,12 @@ use crate::util;
 use super::messages::*;
 
 /// Used to construct a dealer for the aggregated rangeproof MPC protocol.
-pub struct Dealer<C: AffineRepr> {
-    _marker: PhantomData<C>,
+pub struct Dealer<C: AffineRepr, F: Field> {
+    _marker_c: PhantomData<C>,
+    _marker_f: PhantomData<F>,
 }
 
-impl<C: AffineRepr> Dealer<C> {
+impl<C: AffineRepr, F: Field> Dealer<C, F> {
     /// Creates a new dealer coordinating `m` parties proving `n`-bit ranges.
     pub fn new<'a, 'b>(
         bp_gens: &'b BulletproofGens<C>,
@@ -40,7 +42,7 @@ impl<C: AffineRepr> Dealer<C> {
         transcript: &'a mut Transcript,
         n: usize,
         m: usize,
-    ) -> Result<DealerAwaitingBitCommitments<'a, 'b, C>, MPCError> {
+    ) -> Result<DealerAwaitingBitCommitments<'a, 'b, C, F>, MPCError> {
         if !(n == 8 || n == 16 || n == 32 || n == 64) {
             return Err(MPCError::InvalidBitsize);
         }
@@ -77,12 +79,13 @@ impl<C: AffineRepr> Dealer<C> {
             initial_transcript,
             n,
             m,
+            _marker_f: PhantomData,
         })
     }
 }
 
 /// A dealer waiting for the parties to send their [`BitCommitment`]s.
-pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr> {
+pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr, F: Field> {
     bp_gens: &'b BulletproofGens<C>,
     pc_gens: &'b PedersenGens<C>,
     transcript: &'a mut Transcript,
@@ -91,14 +94,15 @@ pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr> {
     initial_transcript: Transcript,
     n: usize,
     m: usize,
+    _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr> DealerAwaitingBitCommitments<'a, 'b, C> {
+impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F> {
     /// Receive each party's [`BitCommitment`]s and compute the [`BitChallenge`].
     pub fn receive_bit_commitments(
         self,
         bit_commitments: Vec<BitCommitment<C>>,
-    ) -> Result<(DealerAwaitingPolyCommitments<'a, 'b, C>, BitChallenge<C>), MPCError> {
+    ) -> Result<(DealerAwaitingPolyCommitments<'a, 'b, C, F>, BitChallenge<C>), MPCError> {
         if self.m != bit_commitments.len() {
             return Err(MPCError::WrongNumBitCommitments);
         }
@@ -131,6 +135,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingBitCommitments<'a, 'b, C> {
                 bit_commitments,
                 A,
                 S,
+                _marker_f: PhantomData,
             },
             bit_challenge,
         ))
@@ -139,7 +144,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingBitCommitments<'a, 'b, C> {
 
 /// A dealer which has sent the [`BitChallenge`] to the parties and
 /// is waiting for their [`PolyCommitment`]s.
-pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr> {
+pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr, F: Field> {
     n: usize,
     m: usize,
     transcript: &'a mut Transcript,
@@ -152,15 +157,16 @@ pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr> {
     A: C,
     /// Aggregated commitment to the parties' bit blindings
     S: C,
+    _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr> DealerAwaitingPolyCommitments<'a, 'b, C> {
+impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F> {
     /// Receive [`PolyCommitment`]s from the parties and compute the
     /// [`PolyChallenge`].
     pub fn receive_poly_commitments(
         self,
         poly_commitments: Vec<PolyCommitment<C>>,
-    ) -> Result<(DealerAwaitingProofShares<'a, 'b, C>, PolyChallenge<C>), MPCError> {
+    ) -> Result<(DealerAwaitingProofShares<'a, 'b, C, F>, PolyChallenge<C>), MPCError> {
         if self.m != poly_commitments.len() {
             return Err(MPCError::WrongNumPolyCommitments);
         }
@@ -191,6 +197,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingPolyCommitments<'a, 'b, C> {
                 poly_commitments,
                 T_1,
                 T_2,
+                _marker_f: PhantomData,
             },
             poly_challenge,
         ))
@@ -200,7 +207,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingPolyCommitments<'a, 'b, C> {
 /// A dealer which has sent the [`PolyChallenge`] to the parties and
 /// is waiting to aggregate their [`ProofShare`]s into a
 /// [`RangeProof`].
-pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr> {
+pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr, F: Field> {
     n: usize,
     m: usize,
     transcript: &'a mut Transcript,
@@ -215,9 +222,10 @@ pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr> {
     S: C,
     T_1: C,
     T_2: C,
+    _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
+impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
     /// Assembles proof shares into an `RangeProof`.
     ///
     /// Used as a helper function by `receive_trusted_shares` (which
@@ -226,7 +234,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     fn assemble_shares(
         &mut self,
         proof_shares: &[ProofShare<C>],
-    ) -> Result<RangeProof<C>, MPCError> {
+    ) -> Result<RangeProof<C, F>, MPCError> {
         if self.m != proof_shares.len() {
             return Err(MPCError::WrongNumProofShares);
         }
@@ -304,7 +312,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     /// This is a convenience wrapper around receive_shares_with_rng
     ///
     #[cfg(feature = "std")]
-    pub fn receive_shares(self, proof_shares: &[ProofShare<C>]) -> Result<RangeProof<C>, MPCError> {
+    pub fn receive_shares(self, proof_shares: &[ProofShare<C>]) -> Result<RangeProof<C, F>, MPCError> {
         self.receive_shares_with_rng(proof_shares, &mut rand::thread_rng())
     }
 
@@ -325,7 +333,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
         mut self,
         proof_shares: &[ProofShare<C>],
         rng: &mut T,
-    ) -> Result<RangeProof<C>, MPCError> {
+    ) -> Result<RangeProof<C, F>, MPCError> {
         let proof = self.assemble_shares(proof_shares)?;
 
         let Vs: Vec<_> = self.bit_commitments.iter().map(|vc| vc.V_j).collect();
@@ -375,7 +383,7 @@ impl<'a, 'b, C: AffineRepr> DealerAwaitingProofShares<'a, 'b, C> {
     pub fn receive_trusted_shares(
         mut self,
         proof_shares: &[ProofShare<C>],
-    ) -> Result<RangeProof<C>, MPCError> {
+    ) -> Result<RangeProof<C, F>, MPCError> {
         self.assemble_shares(proof_shares)
     }
 }

@@ -11,6 +11,7 @@ use ark_std::rand::{prelude::thread_rng, RngCore};
 use ark_std::One;
 
 use core::iter;
+use std::marker::PhantomData;
 
 use merlin::Transcript;
 
@@ -51,7 +52,7 @@ pub mod party;
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
 #[derive(Clone, Debug, Serialize)]
-pub struct RangeProof<C: AffineRepr> {
+pub struct RangeProof<C: AffineRepr, F: Field> {
     /// Commitment to the bits of the value
     A: C,
     /// Commitment to the blinding factors
@@ -68,9 +69,10 @@ pub struct RangeProof<C: AffineRepr> {
     e_blinding: C::ScalarField,
     /// Proof data for the inner-product argument.
     ipp_proof: InnerProductProof<C>,
+    _marker_f: PhantomData<F>,
 }
 
-impl<C: AffineRepr> RangeProof<C> {
+impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     /// Create a rangeproof for a given pair of value `v` and
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_single_with_rng`],
@@ -83,7 +85,7 @@ impl<C: AffineRepr> RangeProof<C> {
         v: u64,
         v_blinding: &C::ScalarField,
         n: usize,
-    ) -> Result<(RangeProof<C>, C), ProofError> {
+    ) -> Result<(RangeProof<C, F>, C), ProofError> {
         RangeProof::prove_single_with_rng(
             bp_gens,
             pc_gens,
@@ -107,7 +109,7 @@ impl<C: AffineRepr> RangeProof<C> {
         v_blinding: &C::ScalarField,
         n: usize,
         rng: &mut T,
-    ) -> Result<(RangeProof<C>, C), ProofError> {
+    ) -> Result<(RangeProof<C, F>, C), ProofError> {
         let (p, Vs) = RangeProof::prove_multiple_with_rng(
             bp_gens,
             pc_gens,
@@ -129,7 +131,7 @@ impl<C: AffineRepr> RangeProof<C> {
         blindings: &[C::ScalarField],
         n: usize,
         rng: &mut T,
-    ) -> Result<(RangeProof<C>, Vec<C>), ProofError> {
+    ) -> Result<(RangeProof<C, F>, Vec<C>), ProofError> {
         use self::dealer::*; // TODO get rid of dealer
         use self::party::*; // TODO get rid of party
 
@@ -142,7 +144,7 @@ impl<C: AffineRepr> RangeProof<C> {
         let parties: Vec<_> = values
             .iter()
             .zip(blindings.iter())
-            .map(|(&v, &v_blinding)| Party::new(bp_gens, pc_gens, v, v_blinding, n))
+            .map(|(&v, &v_blinding)| Party::<C, F>::new(bp_gens, pc_gens, v, v_blinding, n))
             // Collect the iterator of Results into a Result<Vec>, then unwrap it
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -394,7 +396,7 @@ impl<C: AffineRepr> RangeProof<C> {
     /// Deserializes the proof from a byte slice.
     ///
     /// Returns an error if the byte slice cannot be parsed into a `RangeProof`.
-    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof<C>, ProofError> {
+    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof<C, F>, ProofError> {
         if slice.len() % 32 != 0 {
             return Err(ProofError::FormatError);
         }
@@ -429,6 +431,7 @@ impl<C: AffineRepr> RangeProof<C> {
             t_x_blinding,
             e_blinding,
             ipp_proof,
+            _marker_f: PhantomData,
         })
     }
 }

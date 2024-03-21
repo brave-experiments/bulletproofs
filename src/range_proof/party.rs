@@ -58,6 +58,7 @@ impl<C: AffineRepr, F: Field> Party<C, F> {
             v,
             v_blinding,
             V,
+            _marker: PhantomData,
         })
     }
 }
@@ -144,6 +145,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
             s_blinding,
             s_L,
             s_R,
+            field: PhantomData,
         };
         Ok((next_state, bit_commitment))
     }
