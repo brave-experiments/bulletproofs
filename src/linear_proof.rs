@@ -72,7 +72,7 @@ impl<C: AffineRepr> LinearProof<C> {
         transcript.innerproduct_domain_sep(n as u64);
         transcript.append_point(b"C", C);
         for b_i in &b_vec {
-            transcript.append_scalar(b"b_i", b_i);
+            transcript.append_scalar::<C>(b"b_i", b_i);
         }
         for G_i in &G_vec {
             transcript.append_point(b"G_i", G_i);
@@ -142,7 +142,7 @@ impl<C: AffineRepr> LinearProof<C> {
         let S = S.into();
         transcript.append_point(b"S", &S);
 
-        let x_star = transcript.challenge_scalar(b"x_star");
+        let x_star = transcript.challenge_scalar::<C>(b"x_star");
         let a_star = s_star + x_star * a[0];
         let r_star = t_star + x_star * r;
 
@@ -179,7 +179,7 @@ impl<C: AffineRepr> LinearProof<C> {
         transcript.innerproduct_domain_sep(n as u64);
         transcript.append_point(b"C", C);
         for b_i in &b_vec {
-            transcript.append_scalar(b"b_i", b_i);
+            transcript.append_scalar::<C>(b"b_i", b_i);
         }
         for G_i in G {
             transcript.append_point(b"G_i", G_i);
@@ -210,9 +210,9 @@ impl<C: AffineRepr> LinearProof<C> {
         //
         // Where L_R_factors = sum_{j=0}^{l-1} (x_j * L_j + x_j^{-1} * R_j)
         // and G_0 = sum_{i=0}^{2^{l-1}} (x<i> * G_i)
-        let expect_S = self.r * B + self.a * b_0 * F - x_star * (C + L_R_factors) + self.a * G_0;
+        let expect_S = (*B) * self.r + (*F) * self.a * b_0 - (*C + L_R_factors) * x_star + G_0 * self.a;
 
-        if expect_S == self.S {
+        if expect_S.into() == self.S {
             Ok(())
         } else {
             Err(ProofError::VerificationError)
@@ -248,7 +248,7 @@ impl<C: AffineRepr> LinearProof<C> {
         for (L, R) in self.L_vec.iter().zip(self.R_vec.iter()) {
             transcript.validate_and_append_point(b"L", L)?;
             transcript.validate_and_append_point(b"R", R)?;
-            let x_j = transcript.challenge_scalar(b"x_j");
+            let x_j = transcript.challenge_scalar::<C>(b"x_j");
             challenges.push(x_j);
             n_mut = n_mut / 2;
             let (b_L, b_R) = b.split_at_mut(n_mut);
