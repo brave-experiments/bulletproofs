@@ -8,7 +8,7 @@ extern crate alloc;
 
 use crate::util;
 use alloc::vec::Vec;
-use ark_ec::AffineRepr;
+use ark_ec::{AffineRepr, VariableBaseMSM};
 use digest::{ExtendableOutputDirty, Update, XofReader};
 use serde::{Deserialize, Serialize};
 use sha3::{Sha3XofReader, Shake256};
@@ -31,6 +31,13 @@ pub struct PedersenGens<C: AffineRepr> {
     pub B: C,
     /// Base for the blinding factor.
     pub B_blinding: C,
+}
+
+impl<C: AffineRepr> PedersenGens<C> {
+    /// Creates a Pedersen commitment using the value scalar and a blinding factor.
+    pub fn commit(&self, value: C::ScalarField, blinding: C::ScalarField) -> C {
+        C::Group::msm_unchecked(&[self.B, self.B_blinding], &[value, blinding]).into()
+    }
 }
 
 impl<C: AffineRepr> Default for PedersenGens<C> {
