@@ -38,9 +38,9 @@ impl<C: AffineRepr> LinearProof<C> {
     ///
     /// The lengths of the vectors must all be the same, and must all be either 0 or a power of 2.
     /// The proof is created with respect to the bases \\(G\\).
-    pub fn create<T: UniformRand + RngCore>(
+    pub fn create<R: UniformRand + RngCore>(
         transcript: &mut Transcript,
-        rng: &mut T,
+        rng: &mut R,
         // Commitment to witness
         C: &C,
         // Blinding factor for C
@@ -101,8 +101,8 @@ impl<C: AffineRepr> LinearProof<C> {
             let c_L = inner_product(&a_L, &b_R);
             let c_R = inner_product(&a_R, &b_L);
 
-            let s_j = C::ScalarField::rand(&mut rng);
-            let t_j = C::ScalarField::rand(&mut rng);
+            let s_j = C::ScalarField::rand(rng);
+            let t_j = C::ScalarField::rand(rng);
 
             // L = a_L * G_R + s_j * B + c_L * F
             let L: C = C::vartime_multiscalar_mul(
@@ -140,9 +140,10 @@ impl<C: AffineRepr> LinearProof<C> {
             r = r + x_j * s_j + x_j_inv * t_j;
         }
 
-        let s_star = C::ScalarField::rand(&mut rng);
-        let t_star = C::ScalarField::rand(&mut rng);
-        let S: C = t_star * B + s_star * b[0] * F + s_star * G[0];
+        let s_star = C::ScalarField::rand(rng);
+        let t_star = C::ScalarField::rand(rng);
+        let S = (*B) * t_star + (*F) * s_star * b[0] + G[0] * s_star;
+        let S = S.into();
         transcript.append_point(b"S", &S);
 
         let x_star = transcript.challenge_scalar(b"x_star");
