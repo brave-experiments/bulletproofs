@@ -105,12 +105,12 @@ impl<C: AffineRepr> ProofShare<C> {
         let x = &poly_challenge.x;
 
         // Precompute some variables
-        let zz = z * z;
-        let minus_z = -z;
+        let zz = (*z) * z;
+        let minus_z = -(*z);
         let z_j = util::scalar_exp_vartime(z, j as u64); // z^j
         let y_jn = util::scalar_exp_vartime(y, (j * n) as u64); // y^(j*n)
-        let y_jn_inv = y_jn.invert(); // y^(-j*n)
-        let y_inv = y.invert(); // y^(-1)
+        let y_jn_inv = y_jn.inverse().unwrap(); // y^(-j*n)
+        let y_inv = y.inverse().unwrap(); // y^(-1)
 
         if self.t_x != inner_product(&self.l_vec, &self.r_vec) {
             return Err(());
@@ -123,7 +123,7 @@ impl<C: AffineRepr> ProofShare<C> {
             .zip(util::exp_iter(C::ScalarField::from(2u64)))
             .zip(util::exp_iter(y_inv))
             .map(|((r_i, exp_2), exp_y_inv)| {
-                z + exp_y_inv * y_jn_inv * (-r_i) + exp_y_inv * y_jn_inv * (zz * z_j * exp_2)
+                (*z) + exp_y_inv * y_jn_inv * (-(*r_i)) + exp_y_inv * y_jn_inv * (zz * z_j * exp_2)
             });
 
         let P_check = C::vartime_multiscalar_mul(
@@ -142,9 +142,9 @@ impl<C: AffineRepr> ProofShare<C> {
             return Err(());
         }
 
-        let sum_of_powers_y = util::sum_of_powers(&y, n);
+        let sum_of_powers_y = util::sum_of_powers(&y.into(), n);
         let sum_of_powers_2 = util::sum_of_powers(&C::ScalarField::from(2u64), n);
-        let delta = (z - zz) * sum_of_powers_y * y_jn - z * zz * sum_of_powers_2 * z_j;
+        let delta = (*z - zz) * sum_of_powers_y * y_jn - (*z) * zz * sum_of_powers_2 * z_j;
         let t_check = C::vartime_multiscalar_mul(
             iter::once(zz * z_j)
                 .chain(iter::once(*x))

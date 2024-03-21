@@ -122,8 +122,8 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F>
         self.transcript.append_point(b"A", &A);
         self.transcript.append_point(b"S", &S);
 
-        let y = self.transcript.challenge_scalar(b"y");
-        let z = self.transcript.challenge_scalar(b"z");
+        let y = self.transcript.challenge_scalar::<C>(b"y");
+        let z = self.transcript.challenge_scalar::<C>(b"z");
         let bit_challenge = BitChallenge { y, z };
 
         Ok((
@@ -184,7 +184,7 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F
         self.transcript.append_point(b"T_1", &T_1);
         self.transcript.append_point(b"T_2", &T_2);
 
-        let x = self.transcript.challenge_scalar(b"x");
+        let x = self.transcript.challenge_scalar::<C>(b"x");
         let poly_challenge = PolyChallenge { x };
 
         Ok((
@@ -273,13 +273,13 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
         self.transcript.append_scalar(b"e_blinding", &e_blinding);
 
         // Get a challenge value to combine statements for the IPP
-        let w = self.transcript.challenge_scalar(b"w");
-        let Q = w * self.pc_gens.B;
+        let w = self.transcript.challenge_scalar::<C>(b"w");
+        let Q = self.pc_gens.B * w;
 
         let G_factors: Vec<C::ScalarField> = iter::repeat(C::ScalarField::one())
             .take(self.n * self.m)
             .collect();
-        let H_factors: Vec<C::ScalarField> = util::exp_iter(self.bit_challenge.y.invert())
+        let H_factors: Vec<C::ScalarField> = util::exp_iter(self.bit_challenge.y.inverse().unwrap())
             .take(self.n * self.m)
             .collect();
 
@@ -297,8 +297,8 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
             &Q,
             &G_factors,
             &H_factors,
-            self.bp_gens.G(self.n, self.m).cloned().collect(),
-            self.bp_gens.H(self.n, self.m).cloned().collect(),
+            self.bp_gens.G(self.n, self.m).cloned().into().collect(),
+            self.bp_gens.H(self.n, self.m).cloned().into().collect(),
             l_vec,
             r_vec,
         );
@@ -327,7 +327,8 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
         self,
         proof_shares: &[ProofShare<C>],
     ) -> Result<RangeProof<C, F>, MPCError> {
-        self.receive_shares_with_rng(proof_shares, &mut rand::thread_rng())
+        let mut rng = rand::thread_rng();
+        self.receive_shares_with_rng(proof_shares, &mut rng)
     }
 
     /// Assemble the final aggregated [`RangeProof`] from the given
@@ -343,10 +344,10 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
     /// performing local aggregation,
     /// [`receive_trusted_shares`](DealerAwaitingProofShares::receive_trusted_shares)
     /// saves time by skipping verification of the aggregated proof.
-    pub fn receive_shares_with_rng<T: UniformRand + RngCore>(
+    pub fn receive_shares_with_rng<R: UniformRand + RngCore>(
         mut self,
         proof_shares: &[ProofShare<C>],
-        rng: &mut T,
+        rng: &mut R,
     ) -> Result<RangeProof<C, F>, MPCError> {
         let proof = self.assemble_shares(proof_shares)?;
 
