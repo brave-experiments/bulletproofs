@@ -104,14 +104,10 @@ impl<C: AffineRepr> LinearProof<C> {
             let t_j = C::ScalarField::rand(rng);
 
             // L = a_L * G_R + s_j * B + c_L * F
-            let L = C::Group::msm(G_R, a_L).unwrap()
-                + (*B) * s_j
-                + (*F) * c_L;
+            let L = C::Group::msm(G_R, a_L).unwrap() + (*B) * s_j + (*F) * c_L;
 
             // R = a_R * G_L + t_j * B + c_R * F
-            let R = C::Group::msm(G_L, a_R).unwrap()
-                + (*B) * t_j
-                + (*F) * c_R;
+            let R = C::Group::msm(G_L, a_R).unwrap() + (*B) * t_j + (*F) * c_R;
 
             L_vec.push(L.into());
             R_vec.push(R.into());
@@ -210,7 +206,8 @@ impl<C: AffineRepr> LinearProof<C> {
         //
         // Where L_R_factors = sum_{j=0}^{l-1} (x_j * L_j + x_j^{-1} * R_j)
         // and G_0 = sum_{i=0}^{2^{l-1}} (x<i> * G_i)
-        let expect_S = (*B) * self.r + (*F) * self.a * b_0 - (*C + L_R_factors) * x_star + G_0 * self.a;
+        let expect_S =
+            (*B) * self.r + (*F) * self.a * b_0 - (*C + L_R_factors) * x_star + G_0 * self.a;
 
         if expect_S.into() == self.S {
             Ok(())
@@ -259,10 +256,7 @@ impl<C: AffineRepr> LinearProof<C> {
         }
 
         // 3. Compute the challenge inverses: 1/x_k, ..., 1/x_1
-        let challenges_inv = challenges
-            .iter()
-            .map(|x| x.inverse().unwrap())
-            .collect();
+        let challenges_inv = challenges.iter().map(|x| x.inverse().unwrap()).collect();
 
         Ok((challenges, challenges_inv, b[0]))
     }

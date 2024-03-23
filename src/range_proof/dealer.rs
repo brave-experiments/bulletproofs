@@ -270,7 +270,8 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
         self.transcript.append_scalar::<C>(b"t_x", &t_x);
         self.transcript
             .append_scalar::<C>(b"t_x_blinding", &t_x_blinding);
-        self.transcript.append_scalar::<C>(b"e_blinding", &e_blinding);
+        self.transcript
+            .append_scalar::<C>(b"e_blinding", &e_blinding);
 
         // Get a challenge value to combine statements for the IPP
         let w = self.transcript.challenge_scalar::<C>(b"w");
@@ -279,9 +280,10 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
         let G_factors: Vec<C::ScalarField> = iter::repeat(C::ScalarField::one())
             .take(self.n * self.m)
             .collect();
-        let H_factors: Vec<C::ScalarField> = util::exp_iter(self.bit_challenge.y.inverse().unwrap())
-            .take(self.n * self.m)
-            .collect();
+        let H_factors: Vec<C::ScalarField> =
+            util::exp_iter(self.bit_challenge.y.inverse().unwrap())
+                .take(self.n * self.m)
+                .collect();
 
         let l_vec: Vec<C::ScalarField> = proof_shares
             .iter()
@@ -292,16 +294,25 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
             .flat_map(|ps| ps.r_vec.clone().into_iter())
             .collect();
 
-        let ipp_proof: inner_product_proof::InnerProductProof<C> = inner_product_proof::InnerProductProof::create(
-            self.transcript,
-            &Q,
-            &G_factors,
-            &H_factors,
-            self.bp_gens.G(self.n, self.m).cloned().map(|G| G as C).collect(),
-            self.bp_gens.H(self.n, self.m).cloned().map(|H| H as C).collect(),
-            l_vec,
-            r_vec,
-        );
+        let ipp_proof: inner_product_proof::InnerProductProof<C> =
+            inner_product_proof::InnerProductProof::create(
+                self.transcript,
+                &Q,
+                &G_factors,
+                &H_factors,
+                self.bp_gens
+                    .G(self.n, self.m)
+                    .cloned()
+                    .map(|G| G as C)
+                    .collect(),
+                self.bp_gens
+                    .H(self.n, self.m)
+                    .cloned()
+                    .map(|H| H as C)
+                    .collect(),
+                l_vec,
+                r_vec,
+            );
 
         Ok(RangeProof {
             A: self.A,
