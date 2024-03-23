@@ -267,14 +267,14 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
             t_x_blinding = t_x_blinding + ps.t_x_blinding;
             e_blinding += e_blinding + ps.e_blinding;
         }
-        self.transcript.append_scalar(b"t_x", &t_x);
+        self.transcript.append_scalar::<C>(b"t_x", &t_x);
         self.transcript
-            .append_scalar(b"t_x_blinding", &t_x_blinding);
-        self.transcript.append_scalar(b"e_blinding", &e_blinding);
+            .append_scalar::<C>(b"t_x_blinding", &t_x_blinding);
+        self.transcript.append_scalar::<C>(b"e_blinding", &e_blinding);
 
         // Get a challenge value to combine statements for the IPP
         let w = self.transcript.challenge_scalar::<C>(b"w");
-        let Q = self.pc_gens.B * w;
+        let Q = (self.pc_gens.B * w).into();
 
         let G_factors: Vec<C::ScalarField> = iter::repeat(C::ScalarField::one())
             .take(self.n * self.m)
@@ -292,13 +292,13 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
             .flat_map(|ps| ps.r_vec.clone().into_iter())
             .collect();
 
-        let ipp_proof = inner_product_proof::InnerProductProof::create(
+        let ipp_proof: inner_product_proof::InnerProductProof<C> = inner_product_proof::InnerProductProof::create(
             self.transcript,
             &Q,
             &G_factors,
             &H_factors,
-            self.bp_gens.G(self.n, self.m).cloned().into().collect(),
-            self.bp_gens.H(self.n, self.m).cloned().into().collect(),
+            self.bp_gens.G(self.n, self.m).cloned().map(|G| G as C).collect(),
+            self.bp_gens.H(self.n, self.m).cloned().map(|H| H as C).collect(),
             l_vec,
             r_vec,
         );
