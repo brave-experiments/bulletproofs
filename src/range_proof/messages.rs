@@ -8,6 +8,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
+use ark_ff::Field;
 use ark_std::One;
 use core::iter;
 use serde::{Deserialize, Serialize};
