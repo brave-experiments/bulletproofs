@@ -330,10 +330,10 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
                 .chain(iter::once(self.T_2))
                 .chain(self.ipp_proof.L_vec.iter().map(|L| L.clone()))
                 .chain(self.ipp_proof.R_vec.iter().map(|R| R.clone()))
-                .chain(iter::once(Some(pc_gens.B_blinding)))
-                .chain(iter::once(Some(pc_gens.B)))
-                .chain(bp_gens.G(n, m).map(|&x| Some(x)))
-                .chain(bp_gens.H(n, m).map(|&x| Some(x)))
+                .chain(iter::once(Some(pc_gens.B_blinding).unwrap()))
+                .chain(iter::once(Some(pc_gens.B).unwrap()))
+                .chain(bp_gens.G(n, m).map(|&x| Some(x).unwrap()))
+                .chain(bp_gens.H(n, m).map(|&x| Some(x).unwrap()))
                 .chain(value_commitments.iter().map(|V| V.clone())),
         )
         .ok_or_else(|| ProofError::VerificationError)?;
