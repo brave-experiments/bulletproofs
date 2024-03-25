@@ -305,7 +305,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
 
         let g = s.iter().map(|s_i| minus_z - a * s_i);
         let h = s_inv
-            .zip(util::exp_iter(y.invert()))
+            .zip(util::exp_iter(y.inverse().unwrap()))
             .zip(concat_z_and_2.iter())
             .map(|((s_i_inv, exp_y_inv), z_and_2)| z + exp_y_inv * (zz * z_and_2 - b * s_i_inv));
 
