@@ -5,9 +5,6 @@
 //! [the API for the aggregated multiparty computation protocol](../aggregation/index.html#api-for-the-aggregated-multiparty-computation-protocol).
 
 use core::iter;
-
-extern crate alloc;
-
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
