@@ -279,9 +279,9 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
 
         let x = transcript.challenge_scalar::<C>(b"x");
 
-        transcript.append_scalar(b"t_x", &self.t_x);
-        transcript.append_scalar(b"t_x_blinding", &self.t_x_blinding);
-        transcript.append_scalar(b"e_blinding", &self.e_blinding);
+        transcript.append_scalar::<C>(b"t_x", &self.t_x);
+        transcript.append_scalar::<C>(b"t_x_blinding", &self.t_x_blinding);
+        transcript.append_scalar::<C>(b"e_blinding", &self.e_blinding);
 
         let w = transcript.challenge_scalar::<C>(b"w");
 
@@ -300,7 +300,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
             util::exp_iter(C::ScalarField::from(2u64)).take(n).collect();
         let concat_z_and_2: Vec<C::ScalarField> = util::exp_iter(z)
             .take(m)
-            .flat_map(|exp_z| powers_of_2.iter().map(move |exp_2| exp_2 * exp_z))
+            .flat_map(|exp_z| powers_of_2.iter().map(move |exp_2| (*exp_2) * exp_z))
             .collect();
 
         let g = s.iter().map(|s_i| minus_z - a * s_i);
