@@ -153,12 +153,10 @@ impl<C: AffineRepr> ProofShare<C> {
                 .chain(iter::once(-self.e_blinding))
                 .chain(g)
                 .chain(h)
-                .copied()
                 .collect::<Vec<C::ScalarField>>()
                 .as_slice(),
         )
-        .unwrap()
-        .into();
+        .expect("input slice lengths should match");
 
         if !P_check.into_affine().is_zero() {
             return Err(());
@@ -190,15 +188,13 @@ impl<C: AffineRepr> ProofShare<C> {
                 .as_slice(),
             iter::once(zz * z_j)
                 .chain(iter::once(*x))
-                .chain(iter::once(x * x))
+                .chain(iter::once(x.square()))
                 .chain(iter::once(delta - self.t_x))
                 .chain(iter::once(-self.t_x_blinding))
-                .copied()
                 .collect::<Vec<C::ScalarField>>()
                 .as_slice(),
         )
-        .unwrap()
-        .into();
+        .expect("input slice lengths should match");
 
         if t_check.into_affine().is_zero() {
             Ok(())
