@@ -15,7 +15,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{Field, UniformRand};
-use ark_std::rand::RngCore;
+use ark_std::rand::Rng;
 use ark_std::{One, Zero};
 use core::iter;
 
@@ -87,7 +87,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
 
     /// Assigns a position in the aggregated proof to this party,
     /// allowing the party to commit to the bits of their value.
-    pub fn assign_position_with_rng<T: RngCore>(
+    pub fn assign_position_with_rng<T: Rng>(
         self,
         j: usize,
         rng: &mut T,
@@ -198,7 +198,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
 
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
-    pub fn apply_challenge_with_rng<T: RngCore>(
+    pub fn apply_challenge_with_rng<T: Rng>(
         self,
         vc: &BitChallenge<C>,
         rng: &mut T,

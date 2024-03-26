@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, UniformRand};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
-use ark_std::rand::{prelude::thread_rng, RngCore};
+use ark_std::rand::{prelude::thread_rng, Rng};
 use ark_std::One;
 
 use core::iter;
@@ -101,7 +101,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_multiple`].
     /// ```
-    pub fn prove_single_with_rng<R: RngCore>(
+    pub fn prove_single_with_rng<R: Rng>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
@@ -123,7 +123,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     }
 
     /// Create a rangeproof for a set of values.
-    pub fn prove_multiple_with_rng<R: RngCore>(
+    pub fn prove_multiple_with_rng<R: Rng>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
@@ -222,7 +222,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     /// Verifies a rangeproof for a given value commitment \\(V\\).
     ///
     /// This is a convenience wrapper around `verify_multiple` for the `m=1` case.
-    pub fn verify_single_with_rng<R: RngCore>(
+    pub fn verify_single_with_rng<R: Rng>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
@@ -235,7 +235,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
-    pub fn verify_multiple_with_rng<R: RngCore>(
+    pub fn verify_multiple_with_rng<R: Rng>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,

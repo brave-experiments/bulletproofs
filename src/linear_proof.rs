@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{Field, PrimeField};
 use ark_serialize::CanonicalSerialize;
-use ark_std::rand::RngCore;
+use ark_std::rand::Rng;
 use ark_std::{One, UniformRand};
 
 use merlin::Transcript;
@@ -37,7 +37,7 @@ impl<C: AffineRepr> LinearProof<C> {
     ///
     /// The lengths of the vectors must all be the same, and must all be either 0 or a power of 2.
     /// The proof is created with respect to the bases \\(G\\).
-    pub fn create<R: UniformRand + RngCore>(
+    pub fn create<R: Rng>(
         transcript: &mut Transcript,
         rng: &mut R,
         // Commitment to witness

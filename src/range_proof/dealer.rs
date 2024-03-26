@@ -8,7 +8,7 @@ use core::iter;
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
-use ark_ff::{Field, UniformRand};
+use ark_ff::Field;
 use ark_std::rand::Rng;
 use ark_std::One;
 use merlin::Transcript;
