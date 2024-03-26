@@ -136,7 +136,8 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
                 .collect::<Vec<C::ScalarField>>()
                 .as_slice(),
         )
-        .unwrap().into();
+        .unwrap()
+        .into();
 
         // Return next state and all commitments
         let bit_commitment = BitCommitment {

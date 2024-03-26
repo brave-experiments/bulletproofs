@@ -7,7 +7,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use ark_ec::AffineRepr;
+use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::Field;
 use ark_std::One;
 use core::iter;
@@ -127,7 +127,7 @@ impl<C: AffineRepr> ProofShare<C> {
                 (*z) + exp_y_inv * y_jn_inv * (-(*r_i)) + exp_y_inv * y_jn_inv * (zz * z_j * exp_2)
             });
 
-        let P_check = C::vartime_multiscalar_mul(
+        /*let P_check = C::vartime_multiscalar_mul(
             iter::once(C::ScalarField::one())
                 .chain(iter::once(*x))
                 .chain(iter::once(-self.e_blinding))
@@ -138,15 +138,36 @@ impl<C: AffineRepr> ProofShare<C> {
                 .chain(iter::once(&pc_gens.B_blinding))
                 .chain(bp_gens.share(j).G(n))
                 .chain(bp_gens.share(j).H(n)),
-        );
-        if !P_check.is_identity() {
+        );*/
+        let P_check = C::Group::msm(
+            iter::once(&bit_commitment.A_j)
+                .chain(iter::once(&bit_commitment.S_j))
+                .chain(iter::once(&pc_gens.B_blinding))
+                .chain(bp_gens.share(j).G(n))
+                .chain(bp_gens.share(j).H(n))
+                .copied()
+                .collect::<Vec<C>>()
+                .as_slice(),
+            iter::once(C::ScalarField::one())
+                .chain(iter::once(*x))
+                .chain(iter::once(-self.e_blinding))
+                .chain(g)
+                .chain(h)
+                .copied()
+                .collect::<Vec<C::ScalarField>>()
+                .as_slice(),
+        )
+        .unwrap()
+        .into();
+
+        if !P_check.into_affine().is_zero() {
             return Err(());
         }
 
         let sum_of_powers_y = util::sum_of_powers(&y.into(), n);
         let sum_of_powers_2 = util::sum_of_powers(&C::ScalarField::from(2u64), n);
         let delta = (*z - zz) * sum_of_powers_y * y_jn - (*z) * zz * sum_of_powers_2 * z_j;
-        let t_check = C::vartime_multiscalar_mul(
+        /*let t_check = C::vartime_multiscalar_mul(
             iter::once(zz * z_j)
                 .chain(iter::once(*x))
                 .chain(iter::once(x * x))
@@ -157,9 +178,29 @@ impl<C: AffineRepr> ProofShare<C> {
                 .chain(iter::once(&poly_commitment.T_2_j))
                 .chain(iter::once(&pc_gens.B))
                 .chain(iter::once(&pc_gens.B_blinding)),
-        );
+        );*/
+        let t_check = C::Group::msm(
+            iter::once(&bit_commitment.V_j)
+                .chain(iter::once(&poly_commitment.T_1_j))
+                .chain(iter::once(&poly_commitment.T_2_j))
+                .chain(iter::once(&pc_gens.B))
+                .chain(iter::once(&pc_gens.B_blinding))
+                .copied()
+                .collect::<Vec<C>>()
+                .as_slice(),
+            iter::once(zz * z_j)
+                .chain(iter::once(*x))
+                .chain(iter::once(x * x))
+                .chain(iter::once(delta - self.t_x))
+                .chain(iter::once(-self.t_x_blinding))
+                .copied()
+                .collect::<Vec<C::ScalarField>>()
+                .as_slice(),
+        )
+        .unwrap()
+        .into();
 
-        if t_check.is_identity() {
+        if t_check.into_affine().is_zero() {
             Ok(())
         } else {
             Err(())
