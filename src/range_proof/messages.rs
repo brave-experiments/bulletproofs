@@ -162,7 +162,7 @@ impl<C: AffineRepr> ProofShare<C> {
             return Err(());
         }
 
-        let sum_of_powers_y = util::sum_of_powers(&y.into(), n);
+        let sum_of_powers_y: C::ScalarField = util::sum_of_powers(&y, n);
         let sum_of_powers_2 = util::sum_of_powers(&C::ScalarField::from(2u64), n);
         let delta = (*z - zz) * sum_of_powers_y * y_jn - (*z) * zz * sum_of_powers_2 * z_j;
         /*let t_check = C::vartime_multiscalar_mul(
