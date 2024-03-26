@@ -4,7 +4,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use ark_ec::AffineRepr;
+use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, UniformRand};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_std::rand::{prelude::thread_rng, RngCore};
@@ -312,18 +312,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
         let value_commitment_scalars = util::exp_iter(z).take(m).map(|z_exp| c * zz * z_exp);
         let basepoint_scalar = w * (self.t_x - a * b) + c * (delta(n, m, &y, &z) - self.t_x);
 
-        let mega_check = C::optional_multiscalar_mul(
-            iter::once(C::ScalarField::one())
-                .chain(iter::once(x))
-                .chain(iter::once(c * x))
-                .chain(iter::once(c * x * x))
-                .chain(x_sq.iter().cloned())
-                .chain(x_inv_sq.iter().cloned())
-                .chain(iter::once(-self.e_blinding - c * self.t_x_blinding))
-                .chain(iter::once(basepoint_scalar))
-                .chain(g)
-                .chain(h)
-                .chain(value_commitment_scalars),
+        let mega_check = C::Group::msm(
             iter::once(self.A)
                 .chain(iter::once(self.S))
                 .chain(iter::once(self.T_1))
@@ -334,11 +323,26 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
                 .chain(iter::once(Some(pc_gens.B).unwrap()))
                 .chain(bp_gens.G(n, m).map(|&x| Some(x).unwrap()))
                 .chain(bp_gens.H(n, m).map(|&x| Some(x).unwrap()))
-                .chain(value_commitments.iter().map(|V| V.clone())),
+                .chain(value_commitments.iter().map(|V| V.clone()))
+                .collect::<Vec::<C>>()
+                .as_slice(),
+            iter::once(C::ScalarField::one())
+                .chain(iter::once(x))
+                .chain(iter::once(c * x))
+                .chain(iter::once(c * x * x))
+                .chain(x_sq.iter().cloned())
+                .chain(x_inv_sq.iter().cloned())
+                .chain(iter::once(-self.e_blinding - c * self.t_x_blinding))
+                .chain(iter::once(basepoint_scalar))
+                .chain(g)
+                .chain(h)
+                .chain(value_commitment_scalars)
+                .collect::<Vec<C::ScalarField>>()
+                .as_slice(),
         )
-        .ok_or_else(|| ProofError::VerificationError)?;
+        .map_err(|_| ProofError::InvalidInputLength)?;
 
-        if mega_check.is_identity() {
+        if mega_check.into_affine().is_zero() {
             Ok(())
         } else {
             Err(ProofError::VerificationError)
