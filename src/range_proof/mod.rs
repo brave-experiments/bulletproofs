@@ -101,14 +101,14 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_multiple`].
     /// ```
-    pub fn prove_single_with_rng<T: RngCore + UniformRand>(
+    pub fn prove_single_with_rng<R: RngCore>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
         v: u64,
         v_blinding: &C::ScalarField,
         n: usize,
-        rng: &mut T,
+        rng: &mut R,
     ) -> Result<(RangeProof<C, F>, C), ProofError> {
         let (p, Vs) = RangeProof::prove_multiple_with_rng(
             bp_gens,
@@ -123,14 +123,14 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     }
 
     /// Create a rangeproof for a set of values.
-    pub fn prove_multiple_with_rng<T: RngCore + UniformRand>(
+    pub fn prove_multiple_with_rng<R: RngCore>(
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
         values: &[u64],
         blindings: &[C::ScalarField],
         n: usize,
-        rng: &mut T,
+        rng: &mut R,
     ) -> Result<(RangeProof<C, F>, Vec<C>), ProofError> {
         use self::dealer::*; // TODO get rid of dealer
         use self::party::*; // TODO get rid of party
@@ -222,27 +222,27 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
     /// Verifies a rangeproof for a given value commitment \\(V\\).
     ///
     /// This is a convenience wrapper around `verify_multiple` for the `m=1` case.
-    pub fn verify_single_with_rng<T: RngCore + UniformRand>(
+    pub fn verify_single_with_rng<R: RngCore>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
         V: &C,
         n: usize,
-        rng: &mut T,
+        rng: &mut R,
     ) -> Result<(), ProofError> {
         self.verify_multiple_with_rng(bp_gens, pc_gens, transcript, &[*V], n, rng)
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
-    pub fn verify_multiple_with_rng<T: RngCore + UniformRand>(
+    pub fn verify_multiple_with_rng<R: RngCore>(
         &self,
         bp_gens: &BulletproofGens<C>,
         pc_gens: &PedersenGens<C>,
         transcript: &mut Transcript,
         value_commitments: &[C],
         n: usize,
-        rng: &mut T,
+        rng: &mut R,
     ) -> Result<(), ProofError> {
         let m = value_commitments.len();
 

@@ -8,9 +8,9 @@ use core::iter;
 use alloc::vec::Vec;
 
 use ark_ec::AffineRepr;
-use ark_ff::Field;
-use ark_std::rand::RngCore;
-use ark_std::{One, UniformRand};
+use ark_ff::{Field, UniformRand};
+use ark_std::rand::Rng;
+use ark_std::One;
 use merlin::Transcript;
 
 use crate::errors::MPCError;
@@ -352,7 +352,7 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
     /// performing local aggregation,
     /// [`receive_trusted_shares`](DealerAwaitingProofShares::receive_trusted_shares)
     /// saves time by skipping verification of the aggregated proof.
-    pub fn receive_shares_with_rng<R: UniformRand + RngCore>(
+    pub fn receive_shares_with_rng<R: Rng>(
         mut self,
         proof_shares: &[ProofShare<C>],
         rng: &mut R,
