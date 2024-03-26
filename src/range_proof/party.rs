@@ -13,7 +13,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use ark_ec::AffineRepr;
+use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{Field, UniformRand};
 use ark_std::rand::RngCore;
 use ark_std::{One, Zero};
@@ -122,17 +122,26 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
             .collect();
 
         // Compute S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-        let S = C::multiscalar_mul(
-            iter::once(&s_blinding).chain(s_L.iter()).chain(s_R.iter()),
+        let S = C::Group::msm(
             iter::once(&self.pc_gens.B_blinding)
                 .chain(bp_share.G(self.n))
-                .chain(bp_share.H(self.n)),
-        );
+                .chain(bp_share.H(self.n))
+                .copied()
+                .collect::<Vec<C>>()
+                .as_slice(),
+            iter::once(&s_blinding)
+                .chain(s_L.iter())
+                .chain(s_R.iter())
+                .copied()
+                .collect::<Vec<C::ScalarField>>()
+                .as_slice(),
+        )
+        .unwrap().into();
 
         // Return next state and all commitments
         let bit_commitment = BitCommitment {
             V_j: self.V,
-            A_j: A,
+            A_j: A.into(),
             S_j: S,
         };
         let next_state = PartyAwaitingBitChallenge {
