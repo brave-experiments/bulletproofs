@@ -163,7 +163,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
 
         let (parties, poly_commitments): (Vec<_>, Vec<_>) = parties
             .into_iter()
-            .map(|p| p.apply_challenge_with_rng(&bit_challenge, rng))
+            .map(|p| p.apply_challenge_with_rng(&bit_challenge, &mut rng))
             .unzip();
 
         let (dealer, poly_challenge) = dealer.receive_poly_commitments(poly_commitments)?;
@@ -324,7 +324,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
                 .chain(bp_gens.G(n, m).map(|&x| Some(x).unwrap()))
                 .chain(bp_gens.H(n, m).map(|&x| Some(x).unwrap()))
                 .chain(value_commitments.iter().map(|V| V.clone()))
-                .collect::<Vec::<C>>()
+                .collect::<Vec<C>>()
                 .as_slice(),
             iter::once(C::ScalarField::one())
                 .chain(iter::once(x))

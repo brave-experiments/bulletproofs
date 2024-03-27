@@ -4,8 +4,8 @@
 //! For more explanation of how the `dealer`, `party`, and `messages` modules orchestrate the protocol execution, see
 //! [the API for the aggregated multiparty computation protocol](../aggregation/index.html#api-for-the-aggregated-multiparty-computation-protocol).
 
-use core::iter;
 use alloc::vec::Vec;
+use core::iter;
 
 use ark_ec::AffineRepr;
 use ark_ff::Field;

@@ -220,7 +220,9 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, 
 
             l_poly.0[i] = util::scalar_field_to_base_field::<F, C>(&(a_L_i - vc.z));
             l_poly.1[i] = util::scalar_field_to_base_field::<F, C>(&self.s_L[i]);
-            r_poly.0[i] = util::scalar_field_to_base_field::<F, C>(&(exp_y * (a_R_i + vc.z) + offset_zz * exp_2));
+            r_poly.0[i] = util::scalar_field_to_base_field::<F, C>(
+                &(exp_y * (a_R_i + vc.z) + offset_zz * exp_2),
+            );
             r_poly.1[i] = util::scalar_field_to_base_field::<F, C>(&(exp_y * self.s_R[i]));
 
             exp_y *= vc.y; // y^i -> y^(i+1)
@@ -232,8 +234,14 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, 
         // Generate x by committing to T_1, T_2 (line 49-54)
         let t_1_blinding = C::ScalarField::rand(&mut rng);
         let t_2_blinding = C::ScalarField::rand(&mut rng);
-        let T_1 = self.pc_gens.commit(util::base_field_to_scalar_field::<F, C>(&t_poly.1), t_1_blinding);
-        let T_2 = self.pc_gens.commit(util::base_field_to_scalar_field::<F, C>(&t_poly.2), t_2_blinding);
+        let T_1 = self.pc_gens.commit(
+            util::base_field_to_scalar_field::<F, C>(&t_poly.1),
+            t_1_blinding,
+        );
+        let T_2 = self.pc_gens.commit(
+            util::base_field_to_scalar_field::<F, C>(&t_poly.2),
+            t_2_blinding,
+        );
 
         let poly_commitment = PolyCommitment {
             T_1_j: T_1,
@@ -293,7 +301,7 @@ pub struct PartyAwaitingPolyChallenge<C: AffineRepr, F: Field> {
     t_2_blinding: C::ScalarField,
 }
 
-impl<C: AffineRepr, F: Field> PartyAwaitingPolyChallenge<C, F> {
+impl<C: AffineRepr, F: Field + PrimeField> PartyAwaitingPolyChallenge<C, F> {
     /// Receive a [`PolyChallenge`] from the dealer and compute the
     /// party's proof share.
     pub fn apply_challenge(self, pc: &PolyChallenge<C>) -> Result<ProofShare<C>, MPCError> {
@@ -309,11 +317,23 @@ impl<C: AffineRepr, F: Field> PartyAwaitingPolyChallenge<C, F> {
             self.t_2_blinding,
         );
 
-        let t_x = self.t_poly.eval(pc.x);
+        let t_x = util::base_field_to_scalar_field::<F, C>(
+            &self.t_poly.eval(util::scalar_field_to_base_field::<F, C>(&pc.x)),
+        );
         let t_x_blinding = t_blinding_poly.eval(pc.x);
         let e_blinding = self.a_blinding + self.s_blinding * &pc.x;
-        let l_vec = self.l_poly.eval(pc.x);
-        let r_vec = self.r_poly.eval(pc.x);
+        let l_vec = self
+            .l_poly
+            .eval(util::scalar_field_to_base_field::<F, C>(&pc.x))
+            .into_iter()
+            .map(|val| util::base_field_to_scalar_field::<F, C>(&val))
+            .collect();
+        let r_vec = self
+            .r_poly
+            .eval(util::scalar_field_to_base_field::<F, C>(&pc.x))
+            .into_iter()
+            .map(|val| util::base_field_to_scalar_field::<F, C>(&val))
+            .collect();
 
         Ok(ProofShare {
             t_x_blinding,

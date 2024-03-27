@@ -6,8 +6,8 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_ff::{Field, PrimeField};
 use ark_ff::BigInteger;
+use ark_ff::{Field, PrimeField};
 use zeroize::ZeroizeOnDrop;
 
 use crate::inner_product_proof::inner_product;
@@ -342,7 +342,7 @@ pub fn field_as_bytes<F: Field>(field: &F) -> Vec<u8> {
 /// the modulus of the scalar field.
 pub fn base_field_to_scalar_field<F, C>(base: &F) -> C::ScalarField
 where
-    F: PrimeField, 
+    F: PrimeField,
     C: AffineRepr,
 {
     C::ScalarField::from_le_bytes_mod_order(&base.into_bigint().to_bytes_le())
