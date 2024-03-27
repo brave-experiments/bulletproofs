@@ -6,7 +6,8 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 use ark_ec::AffineRepr;
-use ark_ff::Field;
+use ark_ff::{Field, PrimeField};
+use ark_ff::BigInteger;
 use zeroize::ZeroizeOnDrop;
 
 use crate::inner_product_proof::inner_product;
@@ -334,6 +335,28 @@ pub fn field_as_bytes<F: Field>(field: &F) -> Vec<u8> {
         panic!("{}", e)
     }
     bytes
+}
+
+/// Convert a base field element to a scalar field element.
+/// Perform a mod reduction if the base field element is greater than
+/// the modulus of the scalar field.
+pub fn base_field_to_scalar_field<F, C>(base: &F) -> C::ScalarField
+where
+    F: PrimeField, 
+    C: AffineRepr,
+{
+    C::ScalarField::from_le_bytes_mod_order(&base.into_bigint().to_bytes_le())
+}
+
+/// Convert a scalar field element to a base field element.
+/// Mod reduction is not performed since the conversion occurs
+/// for fields on a same curve.
+pub fn scalar_field_to_base_field<F, C>(scalar: &C::ScalarField) -> F
+where
+    F: PrimeField,
+    C: AffineRepr,
+{
+    F::from_le_bytes_mod_order(&scalar.into_bigint().to_bytes_le())
 }
 
 #[cfg(test)]
