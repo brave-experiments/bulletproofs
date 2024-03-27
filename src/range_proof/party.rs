@@ -107,7 +107,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
             // If v_i = 0, we add a_L[i] * G[i] + a_R[i] * H[i] = - H[i]
             // If v_i = 1, we add a_L[i] * G[i] + a_R[i] * H[i] =   G[i]
             let v_i = subtle::Choice::from(((self.v >> i) & 1) as u8);
-            let mut point = -H_i;
+            let mut point = -(H_i.into_group());
             point.conditional_assign(G_i, v_i);
             A += point;
             i += 1;
