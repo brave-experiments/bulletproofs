@@ -14,14 +14,14 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
-use ark_ff::{Field, UniformRand};
+use ark_ff::{Field, PrimeField, UniformRand};
 use ark_std::rand::Rng;
 use ark_std::{One, Zero};
 use core::iter;
 
 use crate::errors::MPCError;
 use crate::generators::{BulletproofGens, PedersenGens};
-use crate::util;
+use crate::util::{self, Poly2, VecPoly1};
 
 use std::marker::PhantomData;
 
@@ -185,7 +185,7 @@ pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field> {
     field: PhantomData<F>,
 }
 
-impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
+impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, F> {
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
     #[cfg(feature = "std")]
@@ -208,8 +208,8 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
         let offset_z = util::scalar_exp_vartime(&vc.z, self.j as u64);
 
         // Calculate t by calculating vectors l0, l1, r0, r1 and multiplying
-        let mut l_poly = util::VecPoly1::zero(n);
-        let mut r_poly = util::VecPoly1::zero(n);
+        let mut l_poly: VecPoly1<F> = util::VecPoly1::zero(n);
+        let mut r_poly: VecPoly1<F> = util::VecPoly1::zero(n);
 
         let offset_zz = vc.z * vc.z * offset_z;
         let mut exp_y = offset_y; // start at y^j
@@ -218,29 +218,29 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingBitChallenge<'a, C, F> {
             let a_L_i = C::ScalarField::from((self.v >> i) & 1);
             let a_R_i = a_L_i - C::ScalarField::one();
 
-            l_poly.0[i] = a_L_i - vc.z;
-            l_poly.1[i] = self.s_L[i];
-            r_poly.0[i] = exp_y * (a_R_i + vc.z) + offset_zz * exp_2;
-            r_poly.1[i] = exp_y * self.s_R[i];
+            l_poly.0[i] = util::scalar_field_to_base_field::<F, C>(&(a_L_i - vc.z));
+            l_poly.1[i] = util::scalar_field_to_base_field::<F, C>(&self.s_L[i]);
+            r_poly.0[i] = util::scalar_field_to_base_field::<F, C>(&(exp_y * (a_R_i + vc.z) + offset_zz * exp_2));
+            r_poly.1[i] = util::scalar_field_to_base_field::<F, C>(&(exp_y * self.s_R[i]));
 
             exp_y *= vc.y; // y^i -> y^(i+1)
             exp_2 = exp_2 + exp_2; // 2^i -> 2^(i+1)
         }
 
-        let t_poly = l_poly.inner_product(&r_poly);
+        let t_poly: Poly2<F> = l_poly.inner_product(&r_poly);
 
         // Generate x by committing to T_1, T_2 (line 49-54)
         let t_1_blinding = C::ScalarField::rand(&mut rng);
         let t_2_blinding = C::ScalarField::rand(&mut rng);
-        let T_1 = self.pc_gens.commit(t_poly.1, t_1_blinding);
-        let T_2 = self.pc_gens.commit(t_poly.2, t_2_blinding);
+        let T_1 = self.pc_gens.commit(util::base_field_to_scalar_field::<F, C>(&t_poly.1), t_1_blinding);
+        let T_2 = self.pc_gens.commit(util::base_field_to_scalar_field::<F, C>(&t_poly.2), t_2_blinding);
 
         let poly_commitment = PolyCommitment {
             T_1_j: T_1,
             T_2_j: T_2,
         };
 
-        let papc = PartyAwaitingPolyChallenge {
+        let papc = PartyAwaitingPolyChallenge::<C, F> {
             v_blinding: self.v_blinding,
             a_blinding: self.a_blinding,
             s_blinding: self.s_blinding,
