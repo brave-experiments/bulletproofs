@@ -21,8 +21,6 @@ use crate::inner_product_proof::InnerProductProof;
 use crate::transcript::TranscriptProtocol;
 use crate::util;
 
-use serde::Serialize;
-
 // Modules for MPC protocol
 pub mod dealer;
 pub mod messages;
@@ -51,7 +49,7 @@ pub mod party;
 /// protocol locally.  That API is exposed in the [`aggregation`](::range_proof_mpc)
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct RangeProof<C: AffineRepr, F: Field> {
     /// Commitment to the bits of the value
     A: C,
