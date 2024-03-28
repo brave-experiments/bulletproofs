@@ -18,7 +18,7 @@ use merlin::Transcript;
 use crate::errors::ProofError;
 use crate::transcript::TranscriptProtocol;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 /// InnerProductProof struct
 pub struct InnerProductProof<C: AffineRepr> {
     pub(crate) L_vec: Vec<C>,
