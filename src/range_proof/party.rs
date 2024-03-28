@@ -28,12 +28,12 @@ use std::marker::PhantomData;
 use super::messages::*;
 
 /// Used to construct a party for the aggregated rangeproof MPC protocol.
-pub struct Party<C: AffineRepr, F: Field> {
+pub struct Party<C: AffineRepr, F: Field + PrimeField> {
     _marker: PhantomData<C>,
     _marker2: PhantomData<F>,
 }
 
-impl<C: AffineRepr, F: Field> Party<C, F> {
+impl<C: AffineRepr, F: Field + PrimeField> Party<C, F> {
     /// Constructs a `PartyAwaitingPosition` with the given rangeproof parameters.
     pub fn new<'a>(
         bp_gens: &'a BulletproofGens<C>,
@@ -64,7 +64,7 @@ impl<C: AffineRepr, F: Field> Party<C, F> {
 }
 
 /// A party waiting for the dealer to assign their position in the aggregation.
-pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field> {
+pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field + PrimeField> {
     bp_gens: &'a BulletproofGens<C>,
     pc_gens: &'a PedersenGens<C>,
     n: usize,
@@ -74,7 +74,7 @@ pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field> {
     _marker: PhantomData<F>,
 }
 
-impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
+impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingPosition<'a, C, F> {
     /// Assigns a position in the aggregated proof to this party,
     /// allowing the party to commit to the bits of their value.
     #[cfg(feature = "std")]
@@ -176,7 +176,7 @@ impl<'a, C: AffineRepr, F: Field> PartyAwaitingPosition<'a, C, F> {
 
 /// A party which has committed to the bits of its value
 /// and is waiting for the aggregated value challenge from the dealer.
-pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field> {
+pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field + PrimeField> {
     n: usize, // bitsize of the range
     v: u64,
     v_blinding: C::ScalarField,

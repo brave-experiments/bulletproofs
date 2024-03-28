@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use core::iter;
 
 use ark_ec::AffineRepr;
-use ark_ff::Field;
+use ark_ff::{Field, PrimeField};
 use ark_std::rand::Rng;
 use ark_std::One;
 use merlin::Transcript;
@@ -26,12 +26,12 @@ use crate::util;
 use super::messages::*;
 
 /// Used to construct a dealer for the aggregated rangeproof MPC protocol.
-pub struct Dealer<C: AffineRepr, F: Field> {
+pub struct Dealer<C: AffineRepr, F: Field + PrimeField> {
     _marker_c: PhantomData<C>,
     _marker_f: PhantomData<F>,
 }
 
-impl<C: AffineRepr, F: Field> Dealer<C, F> {
+impl<C: AffineRepr, F: Field + PrimeField> Dealer<C, F> {
     /// Creates a new dealer coordinating `m` parties proving `n`-bit ranges.
     pub fn new<'a, 'b>(
         bp_gens: &'b BulletproofGens<C>,
@@ -82,7 +82,7 @@ impl<C: AffineRepr, F: Field> Dealer<C, F> {
 }
 
 /// A dealer waiting for the parties to send their [`BitCommitment`]s.
-pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr, F: Field> {
+pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr, F: Field + PrimeField> {
     bp_gens: &'b BulletproofGens<C>,
     pc_gens: &'b PedersenGens<C>,
     transcript: &'a mut Transcript,
@@ -94,7 +94,7 @@ pub struct DealerAwaitingBitCommitments<'a, 'b, C: AffineRepr, F: Field> {
     _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F> {
+impl<'a, 'b, C: AffineRepr, F: Field + PrimeField> DealerAwaitingBitCommitments<'a, 'b, C, F> {
     /// Receive each party's [`BitCommitment`]s and compute the [`BitChallenge`].
     pub fn receive_bit_commitments(
         self,
@@ -144,7 +144,7 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingBitCommitments<'a, 'b, C, F>
 
 /// A dealer which has sent the [`BitChallenge`] to the parties and
 /// is waiting for their [`PolyCommitment`]s.
-pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr, F: Field> {
+pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr, F: Field + PrimeField> {
     n: usize,
     m: usize,
     transcript: &'a mut Transcript,
@@ -160,7 +160,7 @@ pub struct DealerAwaitingPolyCommitments<'a, 'b, C: AffineRepr, F: Field> {
     _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F> {
+impl<'a, 'b, C: AffineRepr, F: Field + PrimeField> DealerAwaitingPolyCommitments<'a, 'b, C, F> {
     /// Receive [`PolyCommitment`]s from the parties and compute the
     /// [`PolyChallenge`].
     pub fn receive_poly_commitments(
@@ -210,7 +210,7 @@ impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingPolyCommitments<'a, 'b, C, F
 /// A dealer which has sent the [`PolyChallenge`] to the parties and
 /// is waiting to aggregate their [`ProofShare`]s into a
 /// [`RangeProof`].
-pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr, F: Field> {
+pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr, F: Field + PrimeField> {
     n: usize,
     m: usize,
     transcript: &'a mut Transcript,
@@ -228,7 +228,7 @@ pub struct DealerAwaitingProofShares<'a, 'b, C: AffineRepr, F: Field> {
     _marker_f: PhantomData<F>,
 }
 
-impl<'a, 'b, C: AffineRepr, F: Field> DealerAwaitingProofShares<'a, 'b, C, F> {
+impl<'a, 'b, C: AffineRepr, F: Field + PrimeField> DealerAwaitingProofShares<'a, 'b, C, F> {
     /// Assembles proof shares into an `RangeProof`.
     ///
     /// Used as a helper function by `receive_trusted_shares` (which

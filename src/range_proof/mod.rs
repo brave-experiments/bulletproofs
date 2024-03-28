@@ -5,7 +5,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
-use ark_ff::{Field, UniformRand};
+use ark_ff::{Field, PrimeField, UniformRand};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_std::rand::{prelude::thread_rng, Rng};
 use ark_std::One;
@@ -50,7 +50,7 @@ pub mod party;
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
 #[derive(Clone, Debug)]
-pub struct RangeProof<C: AffineRepr, F: Field> {
+pub struct RangeProof<C: AffineRepr, F: Field + PrimeField> {
     /// Commitment to the bits of the value
     A: C,
     /// Commitment to the blinding factors
@@ -70,7 +70,7 @@ pub struct RangeProof<C: AffineRepr, F: Field> {
     _marker_f: PhantomData<F>,
 }
 
-impl<C: AffineRepr, F: Field> RangeProof<C, F> {
+impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
     /// Create a rangeproof for a given pair of value `v` and
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_single_with_rng`],
