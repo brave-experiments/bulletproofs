@@ -322,7 +322,9 @@ impl<C: AffineRepr, F: Field + PrimeField> PartyAwaitingPolyChallenge<C, F> {
         );
 
         let t_x = util::base_field_to_scalar_field::<F, C>(
-            &self.t_poly.eval(util::scalar_field_to_base_field::<F, C>(&pc.x)),
+            &self
+                .t_poly
+                .eval(util::scalar_field_to_base_field::<F, C>(&pc.x)),
         );
         let t_x_blinding = t_blinding_poly.eval(pc.x);
         let e_blinding = self.a_blinding + self.s_blinding * &pc.x;
