@@ -163,7 +163,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
 
         let (parties, poly_commitments): (Vec<_>, Vec<_>) = parties
             .into_iter()
-            .map(|p| p.apply_challenge_with_rng(&bit_challenge, &mut rng))
+            .map(|p| p.apply_challenge_with_rng(&bit_challenge, rng))
             .unzip();
 
         let (dealer, poly_challenge) = dealer.receive_poly_commitments(poly_commitments)?;
@@ -286,7 +286,7 @@ impl<C: AffineRepr, F: Field> RangeProof<C, F> {
         let w = transcript.challenge_scalar::<C>(b"w");
 
         // Challenge value for batching statements to be verified
-        let c = C::ScalarField::rand(&mut rng);
+        let c = C::ScalarField::rand(rng);
 
         let (x_sq, x_inv_sq, s) = self.ipp_proof.verification_scalars(n * m, transcript)?;
         let s_inv = s.iter().rev();

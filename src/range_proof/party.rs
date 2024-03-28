@@ -198,10 +198,10 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, 
 
     /// Receive a [`BitChallenge`] from the dealer and use it to
     /// compute commitments to the party's polynomial coefficients.
-    pub fn apply_challenge_with_rng<T: Rng>(
+    pub fn apply_challenge_with_rng<R: Rng>(
         self,
         vc: &BitChallenge<C>,
-        rng: &mut T,
+        rng: &mut R,
     ) -> (PartyAwaitingPolyChallenge<C, F>, PolyCommitment<C>) {
         let n = self.n;
         let offset_y = util::scalar_exp_vartime(&vc.y, (self.j * n) as u64);
@@ -232,8 +232,8 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, 
         let t_poly: Poly2<F> = l_poly.inner_product(&r_poly);
 
         // Generate x by committing to T_1, T_2 (line 49-54)
-        let t_1_blinding = C::ScalarField::rand(&mut rng);
-        let t_2_blinding = C::ScalarField::rand(&mut rng);
+        let t_1_blinding = C::ScalarField::rand(rng);
+        let t_2_blinding = C::ScalarField::rand(rng);
         let T_1 = self.pc_gens.commit(
             util::base_field_to_scalar_field::<F, C>(&t_poly.1),
             t_1_blinding,
