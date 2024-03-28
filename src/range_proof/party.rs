@@ -98,7 +98,7 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingPosition<'a, C, F> {
 
         let bp_share = self.bp_gens.share(j);
 
-        let a_blinding = C::ScalarField::rand(&mut rng);
+        let a_blinding = C::ScalarField::rand(rng);
         // Compute A = <a_L, G> + <a_R, H> + a_blinding * B_blinding
         let mut A = self.pc_gens.B_blinding * a_blinding;
 
@@ -117,12 +117,12 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingPosition<'a, C, F> {
             i += 1;
         }
 
-        let s_blinding = C::ScalarField::rand(&mut rng);
+        let s_blinding = C::ScalarField::rand(rng);
         let s_L: Vec<C::ScalarField> = (0..self.n)
-            .map(|_| C::ScalarField::rand(&mut rng))
+            .map(|_| C::ScalarField::rand(rng))
             .collect();
         let s_R: Vec<C::ScalarField> = (0..self.n)
-            .map(|_| C::ScalarField::rand(&mut rng))
+            .map(|_| C::ScalarField::rand(rng))
             .collect();
 
         // Compute S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
