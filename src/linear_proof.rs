@@ -301,12 +301,12 @@ impl<C: AffineRepr> LinearProof<C> {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.serialized_size());
         for (l, r) in self.L_vec.iter().zip(self.R_vec.iter()) {
-            l.serialize_compressed(&mut buf);
-            r.serialize_compressed(&mut buf);
+            l.serialize_compressed(&mut buf).unwrap();
+            r.serialize_compressed(&mut buf).unwrap();
         }
-        self.S.serialize_compressed(&mut buf);
-        self.a.serialize_compressed(&mut buf);
-        self.r.serialize_compressed(&mut buf);
+        self.S.serialize_compressed(&mut buf).unwrap();
+        self.a.serialize_compressed(&mut buf).unwrap();
+        self.r.serialize_compressed(&mut buf).unwrap();
         buf
     }
 

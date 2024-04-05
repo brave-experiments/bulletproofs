@@ -384,14 +384,14 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
     pub fn to_bytes(&self) -> Vec<u8> {
         // 7 elements: points A, S, T1, T2, scalars tx, tx_bl, e_bl.
         let mut buf = Vec::with_capacity(7 * 32 + self.ipp_proof.serialized_size(Compress::Yes));
-        self.A.serialize_compressed(&mut buf);
-        self.S.serialize_compressed(&mut buf);
-        self.T_1.serialize_compressed(&mut buf);
-        self.T_2.serialize_compressed(&mut buf);
-        CanonicalSerialize::serialize_compressed(&self.t_x, &mut buf);
-        CanonicalSerialize::serialize_compressed(&self.t_x_blinding, &mut buf);
-        CanonicalSerialize::serialize_compressed(&self.e_blinding, &mut buf);
-        self.ipp_proof.serialize_compressed(&mut buf);
+        self.A.serialize_compressed(&mut buf).unwrap();
+        self.S.serialize_compressed(&mut buf).unwrap();
+        self.T_1.serialize_compressed(&mut buf).unwrap();
+        self.T_2.serialize_compressed(&mut buf).unwrap();
+        CanonicalSerialize::serialize_compressed(&self.t_x, &mut buf).unwrap();
+        CanonicalSerialize::serialize_compressed(&self.t_x_blinding, &mut buf).unwrap();
+        CanonicalSerialize::serialize_compressed(&self.e_blinding, &mut buf).unwrap();
+        self.ipp_proof.serialize_compressed(&mut buf).unwrap();
         buf
     }
 
