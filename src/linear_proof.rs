@@ -4,8 +4,8 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
-use ark_ff::{Field, PrimeField};
-use ark_serialize::CanonicalSerialize;
+use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
 use ark_std::{One, UniformRand};
 
@@ -19,7 +19,7 @@ use crate::transcript::TranscriptProtocol;
 /// Protocol: Section E.3 of [GHL'21](https://eprint.iacr.org/2021/1397.pdf)
 ///
 /// Prove that <a, b> = c where a is secret and b is public.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct LinearProof<C: AffineRepr> {
     pub(crate) L_vec: Vec<C>,
     pub(crate) R_vec: Vec<C>,
@@ -283,79 +283,6 @@ impl<C: AffineRepr> LinearProof<C> {
         }
 
         s
-    }
-
-    /// Returns the size in bytes required to serialize the linear proof.
-    ///
-    /// For vectors of length `n` the proof size is
-    /// \\(32 \cdot (2\lg n+3)\\) bytes.
-    pub fn serialized_size(&self) -> usize {
-        (self.L_vec.len() * 2 + 3) * 32
-    }
-
-    /// Serializes the proof into a byte array of \\(2n+3\\) 32-byte elements.
-    /// The layout of the linear proof is:
-    /// * \\(n\\) pairs of compressed elliptic curve points \\(L_0, R_0 \dots, L_{n-1}, R_{n-1}\\),
-    /// * one compressed point \\(S\\),
-    /// * two scalars \\(a, r\\).
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(self.serialized_size());
-        for (l, r) in self.L_vec.iter().zip(self.R_vec.iter()) {
-            l.serialize_compressed(&mut buf).unwrap();
-            r.serialize_compressed(&mut buf).unwrap();
-        }
-        self.S.serialize_compressed(&mut buf).unwrap();
-        self.a.serialize_compressed(&mut buf).unwrap();
-        self.r.serialize_compressed(&mut buf).unwrap();
-        buf
-    }
-
-    /// Deserializes the proof from a byte slice.
-    /// Returns an error in the following cases:
-    /// * the slice does not have \\(2n+3\\) 32-byte elements,
-    /// * \\(n\\) is larger or equal to 32 (proof is too big),
-    /// * any of \\(2n + 1\\) points are not valid compressed Ristretto points,
-    /// * any of 2 scalars are not canonical scalars modulo Ristretto group order.
-    pub fn from_bytes(slice: &[u8]) -> Result<LinearProof<C>, ProofError> {
-        let b = slice.len();
-        if b % 32 != 0 {
-            return Err(ProofError::FormatError);
-        }
-        let num_elements = b / 32;
-        if num_elements < 3 {
-            return Err(ProofError::FormatError);
-        }
-        if (num_elements - 3) % 2 != 0 {
-            return Err(ProofError::FormatError);
-        }
-        let lg_n = (num_elements - 3) / 2;
-        if lg_n >= 32 {
-            return Err(ProofError::FormatError);
-        }
-
-        use crate::util::affine_from_bytes_tai;
-        use crate::util::read32;
-
-        let mut L_vec: Vec<C> = Vec::with_capacity(lg_n);
-        let mut R_vec: Vec<C> = Vec::with_capacity(lg_n);
-        for i in 0..lg_n {
-            let pos = 2 * i * 32;
-            L_vec.push(affine_from_bytes_tai::<C>(&read32(&slice[pos..])));
-            R_vec.push(affine_from_bytes_tai::<C>(&read32(&slice[pos + 32..])));
-        }
-
-        let pos = 2 * lg_n * 32;
-        let S = affine_from_bytes_tai::<C>(&read32(&slice[pos..]));
-        let a = C::ScalarField::from_le_bytes_mod_order(&read32(&slice[pos + 32..]));
-        let r = C::ScalarField::from_le_bytes_mod_order(&read32(&slice[pos + 64..]));
-
-        Ok(LinearProof {
-            L_vec,
-            R_vec,
-            S,
-            a,
-            r,
-        })
     }
 }
 
