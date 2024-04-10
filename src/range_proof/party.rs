@@ -22,6 +22,7 @@ use core::iter;
 use crate::errors::MPCError;
 use crate::generators::{BulletproofGens, PedersenGens};
 use crate::util::{self, Poly2, VecPoly1};
+use zeroize::ZeroizeOnDrop;
 
 use std::marker::PhantomData;
 
@@ -64,6 +65,7 @@ impl<C: AffineRepr, F: Field + PrimeField> Party<C, F> {
 }
 
 /// A party waiting for the dealer to assign their position in the aggregation.
+// #[derive(ZeroizeOnDrop)]     TODO FIX ME
 pub struct PartyAwaitingPosition<'a, C: AffineRepr, F: Field + PrimeField> {
     bp_gens: &'a BulletproofGens<C>,
     pc_gens: &'a PedersenGens<C>,
@@ -161,17 +163,9 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingPosition<'a, C, F> {
     }
 }
 
-/// Overwrite secrets with null bytes when they go out of scope.
-// TODO Ralph replace with zeroize
-/*impl<'a> Drop for PartyAwaitingPosition<'a> {
-    fn drop(&mut self) {
-        self.v.clear();
-        self.v_blinding.clear();
-    }
-}*/
-
 /// A party which has committed to the bits of its value
 /// and is waiting for the aggregated value challenge from the dealer.
+// #[derive(ZeroizeOnDrop)]     // TODO FIX ME
 pub struct PartyAwaitingBitChallenge<'a, C: AffineRepr, F: Field + PrimeField> {
     n: usize, // bitsize of the range
     v: u64,
@@ -264,31 +258,9 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingBitChallenge<'a, C, 
     }
 }
 
-/// Overwrite secrets with null bytes when they go out of scope.
-// TODO Ralph replace with zeroize
-/*impl<'a> Drop for PartyAwaitingBitChallenge<'a> {
-    fn drop(&mut self) {
-        self.v.clear();
-        self.v_blinding.clear();
-        self.a_blinding.clear();
-        self.s_blinding.clear();
-
-        // Important: due to how ClearOnDrop auto-implements InitializableFromZeroed
-        // for T: Default, calling .clear() on Vec compiles, but does not
-        // clear the content. Instead, it only clears the Vec's header.
-        // Clearing the underlying buffer item-by-item will do the job, but will
-        // keep the header as-is, which is fine since the header does not contain secrets.
-        for e in self.s_L.iter_mut() {
-            e.clear();
-        }
-        for e in self.s_R.iter_mut() {
-            e.clear();
-        }
-    }
-}*/
-
 /// A party which has committed to their polynomial coefficents
 /// and is waiting for the polynomial challenge from the dealer.
+#[derive(ZeroizeOnDrop)]
 pub struct PartyAwaitingPolyChallenge<C: AffineRepr, F: Field> {
     offset_zz: C::ScalarField,
     l_poly: util::VecPoly1<F>,
@@ -346,18 +318,3 @@ impl<C: AffineRepr, F: Field + PrimeField> PartyAwaitingPolyChallenge<C, F> {
         })
     }
 }
-
-// Overwrite secrets with null bytes when they go out of scope.
-// TODO ralph implement with zeroize
-/*impl Drop for PartyAwaitingPolyChallenge {
-    fn drop(&mut self) {
-        self.v_blinding.clear();
-        self.a_blinding.clear();
-        self.s_blinding.clear();
-        self.t_1_blinding.clear();
-        self.t_2_blinding.clear();
-
-        // Note: polynomials r_poly, l_poly and t_poly
-        // are cleared within their own Drop impls.
-    }
-}*/
