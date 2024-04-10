@@ -49,7 +49,7 @@ pub mod party;
 /// protocol locally.  That API is exposed in the [`aggregation`](::range_proof_mpc)
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct RangeProof<C: AffineRepr, F: Field + PrimeField> {
     /// Commitment to the bits of the value
     A: C,
@@ -347,11 +347,12 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
         }
     }
 
+    /*
     /// Verifies an aggregated rangeproof for the given value commitments.
     /// This is a convenience wrapper around [`RangeProof::verify_multiple_with_rng`],
     /// passing in a threadsafe RNG.
     // Currently not needed in rewards proofs
-    /*#[cfg(feature = "std")]
+    #[cfg(feature = "std")]
     pub fn verify_multiple(
         &self,
         bp_gens: &BulletproofGens,
@@ -369,73 +370,6 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
             &mut thread_rng(),
         )
     }*/
-
-    /// Serializes the proof into a byte array of \\(2 \lg n + 9\\)
-    /// 32-byte elements, where \\(n\\) is the number of secret bits.
-    ///
-    /// # Layout
-    ///
-    /// The layout of the range proof encoding is:
-    ///
-    /// * four compressed Ristretto points \\(A,S,T_1,T_2\\),
-    /// * three scalars \\(t_x, \tilde{t}_x, \tilde{e}\\),
-    /// * \\(n\\) pairs of compressed Ristretto points \\(L_0,R_0\dots,L_{n-1},R_{n-1}\\),
-    /// * two scalars \\(a, b\\).
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // 7 elements: points A, S, T1, T2, scalars tx, tx_bl, e_bl.
-        let mut buf = Vec::with_capacity(7 * 32 + self.ipp_proof.serialized_size(Compress::Yes));
-        self.A.serialize_compressed(&mut buf).unwrap();
-        self.S.serialize_compressed(&mut buf).unwrap();
-        self.T_1.serialize_compressed(&mut buf).unwrap();
-        self.T_2.serialize_compressed(&mut buf).unwrap();
-        CanonicalSerialize::serialize_compressed(&self.t_x, &mut buf).unwrap();
-        CanonicalSerialize::serialize_compressed(&self.t_x_blinding, &mut buf).unwrap();
-        CanonicalSerialize::serialize_compressed(&self.e_blinding, &mut buf).unwrap();
-        self.ipp_proof.serialize_compressed(&mut buf).unwrap();
-        buf
-    }
-
-    /// Deserializes the proof from a byte slice.
-    ///
-    /// Returns an error if the byte slice cannot be parsed into a `RangeProof`.
-    pub fn from_bytes(slice: &[u8]) -> Result<RangeProof<C, F>, ProofError> {
-        if slice.len() % 32 != 0 {
-            return Err(ProofError::FormatError);
-        }
-        if slice.len() < 7 * 32 {
-            return Err(ProofError::FormatError);
-        }
-
-        use crate::util::affine_from_bytes_tai;
-        use crate::util::read32;
-
-        let A = affine_from_bytes_tai::<C>(&read32(&slice[0 * 32..]));
-        let S = affine_from_bytes_tai::<C>(&read32(&slice[1 * 32..]));
-        let T_1 = affine_from_bytes_tai::<C>(&read32(&slice[2 * 32..]));
-        let T_2 = affine_from_bytes_tai::<C>(&read32(&slice[3 * 32..]));
-
-        let t_x = C::ScalarField::from_random_bytes(&read32(&slice[4 * 32..]))
-            .ok_or(ProofError::FormatError)?;
-        let t_x_blinding = C::ScalarField::from_random_bytes(&read32(&slice[5 * 32..]))
-            .ok_or(ProofError::FormatError)?;
-        let e_blinding = C::ScalarField::from_random_bytes(&read32(&slice[6 * 32..]))
-            .ok_or(ProofError::FormatError)?;
-
-        let ipp_proof = InnerProductProof::deserialize_compressed(&slice[7 * 32..])
-            .map_err(|_| ProofError::FormatError)?;
-
-        Ok(RangeProof {
-            A,
-            S,
-            T_1,
-            T_2,
-            t_x,
-            t_x_blinding,
-            e_blinding,
-            ipp_proof,
-            _marker_f: PhantomData,
-        })
-    }
 }
 
 /// Compute
