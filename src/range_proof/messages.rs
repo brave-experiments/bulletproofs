@@ -93,8 +93,6 @@ impl<C: AffineRepr> ProofShare<C> {
         poly_commitment: &PolyCommitment<C>,
         poly_challenge: &PolyChallenge<C>,
     ) -> Result<(), ()> {
-        //use curve25519_dalek::traits::{IsIdentity, VartimeMultiscalarMul};
-
         use crate::inner_product_proof::inner_product;
         use crate::util;
 
@@ -127,18 +125,6 @@ impl<C: AffineRepr> ProofShare<C> {
                 (*z) + exp_y_inv * y_jn_inv * (-(*r_i)) + exp_y_inv * y_jn_inv * (zz * z_j * exp_2)
             });
 
-        /*let P_check = C::vartime_multiscalar_mul(
-            iter::once(C::ScalarField::one())
-                .chain(iter::once(*x))
-                .chain(iter::once(-self.e_blinding))
-                .chain(g)
-                .chain(h),
-            iter::once(&bit_commitment.A_j)
-                .chain(iter::once(&bit_commitment.S_j))
-                .chain(iter::once(&pc_gens.B_blinding))
-                .chain(bp_gens.share(j).G(n))
-                .chain(bp_gens.share(j).H(n)),
-        );*/
         let P_check = C::Group::msm(
             iter::once(&bit_commitment.A_j)
                 .chain(iter::once(&bit_commitment.S_j))
@@ -165,18 +151,7 @@ impl<C: AffineRepr> ProofShare<C> {
         let sum_of_powers_y: C::ScalarField = util::sum_of_powers(&y, n);
         let sum_of_powers_2 = util::sum_of_powers(&C::ScalarField::from(2u64), n);
         let delta = (*z - zz) * sum_of_powers_y * y_jn - (*z) * zz * sum_of_powers_2 * z_j;
-        /*let t_check = C::vartime_multiscalar_mul(
-            iter::once(zz * z_j)
-                .chain(iter::once(*x))
-                .chain(iter::once(x * x))
-                .chain(iter::once(delta - self.t_x))
-                .chain(iter::once(-self.t_x_blinding)),
-            iter::once(&bit_commitment.V_j)
-                .chain(iter::once(&poly_commitment.T_1_j))
-                .chain(iter::once(&poly_commitment.T_2_j))
-                .chain(iter::once(&pc_gens.B))
-                .chain(iter::once(&pc_gens.B_blinding)),
-        );*/
+
         let t_check = C::Group::msm(
             iter::once(&bit_commitment.V_j)
                 .chain(iter::once(&poly_commitment.T_1_j))
