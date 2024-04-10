@@ -118,12 +118,8 @@ impl<'a, C: AffineRepr, F: Field + PrimeField> PartyAwaitingPosition<'a, C, F> {
         }
 
         let s_blinding = C::ScalarField::rand(rng);
-        let s_L: Vec<C::ScalarField> = (0..self.n)
-            .map(|_| C::ScalarField::rand(rng))
-            .collect();
-        let s_R: Vec<C::ScalarField> = (0..self.n)
-            .map(|_| C::ScalarField::rand(rng))
-            .collect();
+        let s_L: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::rand(rng)).collect();
+        let s_R: Vec<C::ScalarField> = (0..self.n).map(|_| C::ScalarField::rand(rng)).collect();
 
         // Compute S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
         let S = C::Group::msm(
