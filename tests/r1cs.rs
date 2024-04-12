@@ -1,8 +1,5 @@
+#![cfg(feature = "yoloproofs")]
 #![allow(non_snake_case)]
-
-extern crate bulletproofs;
-extern crate merlin;
-extern crate rand;
 
 use ark_ec::AffineRepr;
 use ark_ff::Field;
