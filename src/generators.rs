@@ -291,8 +291,6 @@ impl<'a, C: AffineRepr> BulletproofGensShare<'a, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use ark_ec::AffineRepr;
     use ark_pallas::*;
 
     #[test]
