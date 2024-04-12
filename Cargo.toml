@@ -39,10 +39,11 @@ ark-secp256k1 = { version = "0.4.0" }
 rand_chacha = "0.3.1"
 
 [features]
-default = ["std", "parallel", "asm"]
+default = ["std", "parallel", "asm", "yoloproofs"]
 std = ["thiserror"]
 asm = ["ark-ff/asm"]
 parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "rayon"]
+yoloproofs = ["std"]
 
 [[test]]
 name = "range_proof"
