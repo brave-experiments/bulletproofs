@@ -36,6 +36,7 @@ ark-algebra-test-templates = "0.3.0"
 ark-pallas = "0.4.0"
 ark-vesta = "0.4.0"
 ark-secp256k1 = { version = "0.4.0" }
+rand_chacha = "0.3.1"
 
 [features]
 default = ["std", "parallel", "asm"]
