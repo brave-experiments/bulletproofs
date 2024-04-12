@@ -2,6 +2,8 @@ use rand::SeedableRng;
 
 use rand_chacha::ChaChaRng;
 
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
+
 use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 
@@ -83,7 +85,9 @@ fn deserialize_and_verify() {
     for i in 0..4 {
         for j in 0..4 {
             let (n, m) = (8 << i, 1 << j);
-            let proof = RangeProof::from_bytes(&hex::decode(&proofs[i][j]).unwrap())
+            let proof = hex::decode(&proofs[i][j])
+                .expect("Rangeproof hex decode failed");
+            let proof = RangeProof::deserialize_compressed(proof.as_slice())
                 .expect("Rangeproof deserialization failed");
             let mut transcript = Transcript::new(b"Deserialize-And-Verify Test");
             assert_eq!(
@@ -126,7 +130,10 @@ fn generate_test_vectors() {
             .unwrap();
 
             println!("n,m = {}, {}", n, m);
-            println!("proof = \"{}\"", hex::encode(proof.to_bytes()));
+            let mut proof = Vec::with_capacity(proof.serialized_size(Compress::Yes));
+            proof.serialize_compressed(&mut proof).
+                expect("RangeProof serialization failed");
+            println!("proof = \"{}\"", hex::encode(&proof));
             println!("vc = [");
             for com in &value_commitments {
                 println!("    \"{}\"", hex::encode(com.as_bytes()));
