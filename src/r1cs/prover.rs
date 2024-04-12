@@ -89,12 +89,12 @@ impl<'g, T: BorrowMut<Transcript>, C: AffineRepr> ConstraintSystem<C::ScalarFiel
 
     fn multiply(
         &mut self,
-        mut left: LinearCombination<C: ScalarField>,
-        mut right: LinearCombination<C: ScalarField>,
+        mut left: LinearCombination<C::ScalarField>,
+        mut right: LinearCombination<C::ScalarField>,
     ) -> (
-        Variable<C: ScalarField>,
-        Variable<C: ScalarField>,
-        Variable<C: ScalarField>,
+        Variable<C::ScalarField>,
+        Variable<C::ScalarField>,
+        Variable<C::ScalarField>,
     ) {
         // Synthesize the assignments for l,r,o
         let l = self.eval(&left);
