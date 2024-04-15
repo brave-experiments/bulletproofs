@@ -389,7 +389,7 @@ mod tests {
     use ark_ff::{One, Zero};
 
     use ark_ec::short_weierstrass::Affine;
-    use ark_secp256k1::{Config as SecpConfig, Fq as SecpBaseField};
+    use ark_secp256r1::{Config as SecpConfig, Fq as SecpBaseField};
 
     type Scalar = <Affine<SecpConfig> as AffineRepr>::ScalarField;
 
