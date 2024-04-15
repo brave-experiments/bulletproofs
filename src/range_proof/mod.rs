@@ -393,6 +393,8 @@ mod tests {
 
     type Scalar = <Affine<SecpConfig> as AffineRepr>::ScalarField;
 
+    const TEST_LABEL: &[u8] = b"AggregatedRangeProofTest";
+
     #[test]
     fn test_delta() {
         let mut rng = rand::thread_rng();
@@ -450,7 +452,7 @@ mod tests {
                 (0..m).map(|_| C::ScalarField::rand(&mut rng)).collect();
 
             // 1. Create the proof
-            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+            let mut transcript = Transcript::new(TEST_LABEL);
             let (proof, value_commitments) = RangeProof::<C, F>::prove_multiple(
                 &bp_gens,
                 &pc_gens,
@@ -476,7 +478,7 @@ mod tests {
                 RangeProof::deserialize_compressed(&*proof_bytes).unwrap();
 
             // 4. Verify with the same customization label as above
-            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+            let mut transcript = Transcript::new(TEST_LABEL);
 
             assert!(proof
                 .verify_multiple(&bp_gens, &pc_gens, &mut transcript, &value_commitments, n)
@@ -539,7 +541,7 @@ mod tests {
         let bp_gens = BulletproofGens::new(n, m);
 
         let mut rng = rand::thread_rng();
-        let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+        let mut transcript = Transcript::new(TEST_LABEL);
 
         // Parties 0, 2 are honest and use a 32-bit value
         let v0 = rng.gen::<u32>() as u64;
@@ -626,7 +628,7 @@ mod tests {
         let bp_gens = BulletproofGens::new(n, m);
 
         let mut rng = rand::thread_rng();
-        let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+        let mut transcript = Transcript::new(TEST_LABEL);
 
         let v0 = rng.gen::<u32>() as u64;
         let v0_blinding = Scalar::rand(&mut rng);
