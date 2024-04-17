@@ -39,6 +39,7 @@ ark-secp256r1 = { version = "0.4.0" }
 rand_chacha = "0.3.1"
 curve25519-dalek = "4.1.2"
 hex = "0.4.3"
+strobe-rs = { version = "0.8.1" }
 
 [features]
 default = ["std", "parallel", "asm"]
