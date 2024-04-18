@@ -18,8 +18,6 @@ sha3 = { version = "0.9.1", default-features = false }
 digest = { version = "0.9.0", default-features = false }
 rand = { version = "0.8" }
 byteorder = { version = "1", default-features = false }
-serde = { version = "1", features = [ "derive" ] }
-serde_json = "1.0"
 thiserror = { version = "1", optional = true }
 merlin = { version = "2", default-features = false }
 ark-ec = { version = "0.4.0"}

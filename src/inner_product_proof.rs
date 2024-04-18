@@ -8,9 +8,7 @@ use alloc::vec::Vec;
 
 use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{fields::batch_inversion, Field};
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, Compress, Read, SerializationError, Valid, Write,
-};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use ark_std::One;
 use core::iter;
 use merlin::Transcript;
@@ -18,7 +16,7 @@ use merlin::Transcript;
 use crate::errors::ProofError;
 use crate::transcript::TranscriptProtocol;
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 /// InnerProductProof struct
 pub struct InnerProductProof<C: AffineRepr> {
     pub(crate) L_vec: Vec<C>,
@@ -372,67 +370,6 @@ impl<C: AffineRepr> InnerProductProof<C> {
         } else {
             Err(ProofError::VerificationError)
         }
-    }
-
-    /// Returns the size in bytes required to serialize the inner
-    /// product proof.
-    pub fn serialized_size(&self, compress: Compress) -> usize {
-        // size of the two scalars
-        let scalars_size = self.a.serialized_size(compress) * 2;
-        // size of the 2 point vectors (should be equal)
-        let l_and_r_size = self.L_vec.serialized_size(compress) * 2;
-        scalars_size + l_and_r_size
-    }
-}
-
-impl<C: AffineRepr> Valid for InnerProductProof<C> {
-    fn check(&self) -> Result<(), SerializationError> {
-        Ok(())
-    }
-}
-impl<C: AffineRepr> CanonicalDeserialize for InnerProductProof<C> {
-    fn deserialize_with_mode<R: Read>(
-        mut reader: R,
-        compress: Compress,
-        validate: ark_serialize::Validate,
-    ) -> Result<Self, SerializationError> {
-        Ok(Self {
-            L_vec: Vec::<C>::deserialize_with_mode(&mut reader, compress, validate)?,
-            R_vec: Vec::<C>::deserialize_with_mode(&mut reader, compress, validate)?,
-            a: C::ScalarField::deserialize_with_mode(&mut reader, compress, validate)?,
-            b: C::ScalarField::deserialize_with_mode(&mut reader, compress, validate)?,
-        })
-    }
-}
-
-impl<C: AffineRepr> CanonicalSerialize for InnerProductProof<C> {
-    /// Returns the size in bytes required to serialize the inner
-    /// product proof.
-    ///
-    /// For vectors of length `n` the proof size is
-    /// \\(32 \cdot (2\lg n+2)\\) bytes.
-    fn serialized_size(&self, mode: Compress) -> usize {
-        // size of the two scalars
-        let scalars_size = self.a.serialized_size(mode) * 2;
-        // size of the 2 point vectors (should be equal)
-        let l_and_r_size = self.L_vec.serialized_size(mode) * 2;
-        scalars_size + l_and_r_size
-    }
-
-    /// Serializes the proof into a byte array of \\(2n+2\\) 32-byte elements.
-    /// The layout of the inner product proof is:
-    /// * \\(n\\) pairs of compressed Ristretto points \\(L_0, R_0 \dots, L_{n-1}, R_{n-1}\\),
-    /// * two scalars \\(a, b\\).
-    fn serialize_with_mode<W: Write>(
-        &self,
-        mut writer: W,
-        compress: Compress,
-    ) -> Result<(), SerializationError> {
-        self.L_vec.serialize_with_mode(&mut writer, compress)?;
-        self.R_vec.serialize_with_mode(&mut writer, compress)?;
-        self.a.serialize_with_mode(&mut writer, compress)?;
-        self.b.serialize_with_mode(&mut writer, compress)?;
-        Ok(())
     }
 }
 

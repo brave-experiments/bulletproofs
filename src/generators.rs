@@ -9,8 +9,8 @@ extern crate alloc;
 use crate::util;
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, VariableBaseMSM};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use digest::{ExtendableOutputDirty, Update, XofReader};
-use serde::{Deserialize, Serialize};
 use sha3::{Sha3XofReader, Shake256};
 use std::marker::PhantomData;
 
@@ -25,7 +25,7 @@ use std::marker::PhantomData;
 /// * `B`: the `ristretto255` basepoint;
 /// * `B_blinding`: the result of `ristretto255` SHA3-512 // todo
 /// hash-to-group on input `B_bytes`.
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PedersenGens<C: AffineRepr> {
     /// Bases for the committed values.
     pub B: C,
@@ -131,7 +131,7 @@ impl<C: AffineRepr> Iterator for GeneratorsChain<C> {
 /// chain, and even forward-compatible to multiparty aggregation of
 /// constraint system proofs, since the generators are namespaced by
 /// their party index.
-#[derive(Clone)]
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BulletproofGens<C: AffineRepr> {
     /// The maximum number of usable generators for each party.
     pub gens_capacity: usize,
@@ -291,15 +291,16 @@ impl<'a, C: AffineRepr> BulletproofGensShare<'a, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_pallas::*;
+    use ark_ec::short_weierstrass::Affine;
+    use ark_secp256r1::Config as SecpConfig;
 
     #[test]
     fn aggregated_gens_iter_matches_flat_map() {
-        let gens = BulletproofGens::<Affine>::new(64, 8);
+        let gens = BulletproofGens::<Affine<SecpConfig>>::new(64, 8);
 
         let helper = |n: usize, m: usize| {
-            let agg_G: Vec<Affine> = gens.G(n, m).copied().collect();
-            let flat_G: Vec<Affine> = gens
+            let agg_G: Vec<Affine<SecpConfig>> = gens.G(n, m).copied().collect();
+            let flat_G: Vec<Affine<SecpConfig>> = gens
                 .G_vec
                 .iter()
                 .take(m)
@@ -307,8 +308,8 @@ mod tests {
                 .copied()
                 .collect();
 
-            let agg_H: Vec<Affine> = gens.H(n, m).copied().collect();
-            let flat_H: Vec<Affine> = gens
+            let agg_H: Vec<Affine<SecpConfig>> = gens.H(n, m).copied().collect();
+            let flat_H: Vec<Affine<SecpConfig>> = gens
                 .H_vec
                 .iter()
                 .take(m)
@@ -336,17 +337,17 @@ mod tests {
 
     #[test]
     fn resizing_small_gens_matches_creating_bigger_gens() {
-        let gens = BulletproofGens::<Affine>::new(64, 8);
+        let gens = BulletproofGens::<Affine<SecpConfig>>::new(64, 8);
 
-        let mut gen_resized = BulletproofGens::<Affine>::new(32, 8);
+        let mut gen_resized = BulletproofGens::<Affine<SecpConfig>>::new(32, 8);
         gen_resized.increase_capacity(64);
 
         let helper = |n: usize, m: usize| {
-            let gens_G: Vec<Affine> = gens.G(n, m).copied().collect();
-            let gens_H: Vec<Affine> = gens.H(n, m).copied().collect();
+            let gens_G: Vec<Affine<SecpConfig>> = gens.G(n, m).copied().collect();
+            let gens_H: Vec<Affine<SecpConfig>> = gens.H(n, m).copied().collect();
 
-            let resized_G: Vec<Affine> = gen_resized.G(n, m).copied().collect();
-            let resized_H: Vec<Affine> = gen_resized.H(n, m).copied().collect();
+            let resized_G: Vec<Affine<SecpConfig>> = gen_resized.G(n, m).copied().collect();
+            let resized_H: Vec<Affine<SecpConfig>> = gen_resized.H(n, m).copied().collect();
 
             assert_eq!(gens_G, resized_G);
             assert_eq!(gens_H, resized_H);
@@ -357,45 +358,45 @@ mod tests {
         helper(16, 8);
     }
 
-    // TODO fix tests later
-    /*#[test]
-    fn serialize_pedersen_gens() {
-        let pedersen_gens: PedersenGens<_> = PedersenGens::default();
+    #[test]
+    fn serialize_deserialize_pedersen_gens() {
+        let pedersen_gens = PedersenGens::<Affine<SecpConfig>>::default();
 
-        let json_string: String = serde_json::to_string::<PedersenGens<_>>(&pedersen_gens).unwrap();
-        let compare: String = String::from("{\"B\":[226,242,174,10,106,188,78,113,168,132,169,97,197,0,81,95,88,227,11,106,165,130,221,141,182,166,89,69,224,141,45,118],\"B_blinding\":[140,146,64,180,86,169,230,220,101,195,119,161,4,141,116,95,148,160,140,219,127,68,203,205,123,70,243,64,72,135,17,52]}");
+        // serialize pedersen gens
+        let mut pg_vec: Vec<u8> = Vec::new();
+        pedersen_gens.serialize_compressed(&mut pg_vec).unwrap();
 
-        assert_eq!(json_string, compare);
+        // deserialize pedersen gens
+        let deserialized_generators =
+            PedersenGens::<Affine<SecpConfig>>::deserialize_compressed(&*pg_vec).unwrap();
+
+        assert_eq!(pedersen_gens.B, deserialized_generators.B);
+        assert_eq!(pedersen_gens.B_blinding, deserialized_generators.B_blinding);
     }
 
     #[test]
-    fn deserialize_pedersen_gens<C: AffineRepr>() {
-        let json_string: String = String::from("{\"B\":[226,242,174,10,106,188,78,113,168,132,169,97,197,0,81,95,88,227,11,106,165,130,221,141,182,166,89,69,224,141,45,118],\"B_blinding\":[140,146,64,180,86,169,230,220,101,195,119,161,4,141,116,95,148,160,140,219,127,68,203,205,123,70,243,64,72,135,17,52]}");
+    fn serialize_deserialize_bulletproof_gens() {
+        let bulletproof_gens = BulletproofGens::<Affine<SecpConfig>>::new(64, 1);
 
-        let pedersen_gens: PedersenGens<C> = serde_json::from_str(&json_string).unwrap();
-        let default_pedersen_gens = PedersenGens::default();
+        // serialize bulletproof gens
+        let mut bpgens_vec: Vec<u8> = Vec::new();
+        bulletproof_gens
+            .serialize_compressed(&mut bpgens_vec)
+            .unwrap();
 
-        assert_eq!(pedersen_gens.B, default_pedersen_gens.B);
-        assert_eq!(pedersen_gens.B_blinding, default_pedersen_gens.B_blinding);
-    }
+        // deserialize bulletproof gens
+        let deserialized_bulletproof_gens =
+            BulletproofGens::<Affine<SecpConfig>>::deserialize_compressed(&*bpgens_vec).unwrap();
 
-    #[test]
-    fn serialize_deserialize_bulletproof_gens<C: AffineRepr>() {
-        let bulletproof_gens: BulletproofGens<C> = BulletproofGens::new(64, 1);
-
-        let json_string = serde_json::to_string(&bulletproof_gens).unwrap();
-        let generated_bulletproof_gens: BulletproofGens<C> =
-            serde_json::from_str(&json_string).unwrap();
-
+        assert_eq!(bulletproof_gens.G_vec, deserialized_bulletproof_gens.G_vec);
+        assert_eq!(bulletproof_gens.H_vec, deserialized_bulletproof_gens.H_vec);
         assert_eq!(
             bulletproof_gens.gens_capacity,
-            generated_bulletproof_gens.gens_capacity
+            deserialized_bulletproof_gens.gens_capacity
         );
         assert_eq!(
             bulletproof_gens.party_capacity,
-            generated_bulletproof_gens.party_capacity
+            deserialized_bulletproof_gens.party_capacity
         );
-        assert_eq!(bulletproof_gens.G_vec, generated_bulletproof_gens.G_vec);
-        assert_eq!(bulletproof_gens.H_vec, generated_bulletproof_gens.H_vec);
-    }*/
+    }
 }

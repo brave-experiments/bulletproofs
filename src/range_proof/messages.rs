@@ -9,14 +9,14 @@ extern crate alloc;
 use alloc::vec::Vec;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::Field;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::One;
 use core::iter;
-use serde::{Deserialize, Serialize};
 
 use crate::generators::{BulletproofGens, PedersenGens};
 
 /// A commitment to the bits of a party's value.
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BitCommitment<C: AffineRepr> {
     pub(super) V_j: C,
     pub(super) A_j: C,
@@ -24,28 +24,28 @@ pub struct BitCommitment<C: AffineRepr> {
 }
 
 /// Challenge values derived from all parties' [`BitCommitment`]s.
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct BitChallenge<C: AffineRepr> {
     pub(super) y: C::ScalarField,
     pub(super) z: C::ScalarField,
 }
 
 /// A commitment to a party's polynomial coefficents.
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PolyCommitment<C: AffineRepr> {
     pub(super) T_1_j: C,
     pub(super) T_2_j: C,
 }
 
 /// Challenge values derived from all parties' [`PolyCommitment`]s.
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PolyChallenge<C: AffineRepr> {
     pub(super) x: C::ScalarField,
 }
 
 /// A party's proof share, ready for aggregation into the final
 /// [`RangeProof`](::RangeProof).
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct ProofShare<C: AffineRepr> {
     pub(super) t_x: C::ScalarField,
     pub(super) t_x_blinding: C::ScalarField,
