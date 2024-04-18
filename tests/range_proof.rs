@@ -85,8 +85,7 @@ fn deserialize_and_verify() {
     for i in 0..4 {
         for j in 0..4 {
             let (n, m) = (8 << i, 1 << j);
-            let proof = hex::decode(&proofs[i][j])
-                .expect("Rangeproof hex decode failed");
+            let proof = hex::decode(&proofs[i][j]).expect("Rangeproof hex decode failed");
             let proof = RangeProof::deserialize_compressed(proof.as_slice())
                 .expect("Rangeproof deserialization failed");
             let mut transcript = Transcript::new(b"Deserialize-And-Verify Test");
@@ -131,8 +130,9 @@ fn generate_test_vectors() {
 
             println!("n,m = {}, {}", n, m);
             let mut proof = Vec::with_capacity(proof.serialized_size(Compress::Yes));
-            proof.serialize_compressed(&mut proof).
-                expect("RangeProof serialization failed");
+            proof
+                .serialize_compressed(&mut proof)
+                .expect("RangeProof serialization failed");
             println!("proof = \"{}\"", hex::encode(&proof));
             println!("vc = [");
             for com in &value_commitments {
