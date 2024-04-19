@@ -393,7 +393,7 @@ pub fn inner_product<S: Field>(a: &[S], b: &[S]) -> S {
 mod tests {
     use super::*;
 
-    use ark_pallas::Affine;
+    use ark_secp256r1::Affine;
     use ark_std::UniformRand;
 
     type F = <Affine as AffineRepr>::ScalarField;

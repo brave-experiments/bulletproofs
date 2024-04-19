@@ -363,7 +363,7 @@ where
 mod tests {
     use super::*;
 
-    use ark_pallas::*;
+    use ark_secp256r1::Affine;
 
     type Scalar = <Affine as AffineRepr>::ScalarField;
     use ark_ff::{One, Zero};

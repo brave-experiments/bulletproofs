@@ -31,8 +31,6 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 [dev-dependencies]
 criterion = "0.3"
 ark-algebra-test-templates = "0.3.0"
-ark-pallas = "0.4.0"
-ark-vesta = "0.4.0"
 ark-secp256r1 = { version = "0.4.0" }
 rand_chacha = "0.3.1"
 curve25519-dalek = "4.1.2"
