@@ -394,8 +394,8 @@ mod tests {
     use super::*;
 
     use ark_secp256r1::Affine;
-    use ark_std::UniformRand;
     use ark_serialize::Compress;
+    use ark_std::UniformRand;
 
     type F = <Affine as AffineRepr>::ScalarField;
 
