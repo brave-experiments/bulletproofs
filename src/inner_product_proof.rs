@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use ark_ec::{AffineRepr, VariableBaseMSM};
 use ark_ff::{fields::batch_inversion, Field};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::One;
 use core::iter;
 use merlin::Transcript;
@@ -395,6 +395,7 @@ mod tests {
 
     use ark_secp256r1::Affine;
     use ark_std::UniformRand;
+    use ark_serialize::Compress;
 
     type F = <Affine as AffineRepr>::ScalarField;
 
