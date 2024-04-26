@@ -95,27 +95,10 @@ impl TranscriptProtocol for Transcript {
     }
 
     fn challenge_scalar<C: AffineRepr>(&mut self, label: &'static [u8]) -> C::ScalarField {
-        extern crate crypto;
-        use crypto::digest::Digest;
-        use crypto::sha3::Sha3;
-
         let mut bytes = [0u8; 64];
         self.challenge_bytes(label, &mut bytes);
 
-        for i in 0..=u8::max_value() {
-            let mut sha = Sha3::sha3_256();
-            sha.input(&bytes);
-            sha.input(&[i]);
-            let mut buf = [0u8; 32];
-
-            sha.result(&mut buf);
-            let res = <C::ScalarField as Field>::from_random_bytes(&buf);
-
-            if let Some(scalar) = res {
-                return scalar;
-            }
-        }
-        panic!()
+        C::ScalarField::from_random_bytes(&bytes).expect("Scalar from bytes")
     }
 }
 
@@ -126,7 +109,6 @@ mod tests {
     use ark_ff::UniformRand;
     use ark_secp256r1::Affine;
     use ark_serialize::CanonicalSerialize;
-    use crypto::{digest::Digest, sha3::Sha3};
     use strobe_rs::{SecParam, Strobe};
 
     type Scalar = <Affine as AffineRepr>::ScalarField;
@@ -211,19 +193,7 @@ mod tests {
             self.challenge_bytes(label, &mut bytes);
 
             // reconstruct scalar from bytes
-            for i in 0..=u8::max_value() {
-                let mut sha = Sha3::sha3_256();
-                sha.input(&bytes);
-                sha.input(&[i]);
-
-                let mut buf = [0u8; 32];
-                sha.result(&mut buf);
-
-                if let Some(scalar) = <C::ScalarField>::from_random_bytes(&bytes) {
-                    return scalar;
-                }
-            }
-            panic!()
+            C::ScalarField::from_random_bytes(&bytes).expect("Scalar from bytes")
         }
 
         /// Appends the domain seperation for range proofs
