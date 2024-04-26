@@ -328,4 +328,23 @@ mod tests {
 
         assert_eq!(real_challenge, test_challenge);
     }
+
+    #[test]
+    fn challenge_bytes() {
+        let label = b"Bulletproofs Transcript Test";
+        let expected =
+            "d20c694f101e541c7a8c7c4d31ba8437ee8d930cc67faa1dfc730260fa11c64e";
+
+        // Check merlin transcript output
+        let mut transcript = Transcript::new(label);
+        let mut challenge = [0u8; 32];
+        transcript.challenge_bytes(label, &mut challenge);
+        assert_eq!(hex::encode(challenge), expected);
+
+        // Do the same for our TestTranscript implemenation
+        let mut transcript = TestTranscript::new(label);
+        let mut challenge = [0u8; 32];
+        transcript.challenge_bytes(label, &mut challenge);
+        assert_eq!(hex::encode(challenge), expected);
+    }
 }
