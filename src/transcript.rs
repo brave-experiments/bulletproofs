@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rangeproof_domain_sep() {
+    fn rangeproof_domain_sep() {
         let mut real_transcript = Transcript::new(b"test protocol");
         let mut test_transcript = TestTranscript::new(b"test protocol");
 
@@ -245,7 +245,7 @@ mod tests {
     /// We then compare the result of both transcripts when challenging
     /// the output.
     #[test]
-    fn test_append_point() {
+    fn append_point() {
         let mut real_transcript = Transcript::new(b"test protocol");
         let mut test_transcript = TestTranscript::new(b"test protocol");
 
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_and_append_point() {
+    fn validate_and_append_point() {
         let mut real_transcript = Transcript::new(b"test protocol");
         let mut test_transcript = TestTranscript::new(b"test protocol");
 
@@ -299,18 +299,23 @@ mod tests {
     }
 
     #[test]
-    fn test_challenge_scalar() {
-        let mut real_transcript = Transcript::new(b"test protocol");
-        let mut test_transcript = TestTranscript::new(b"test protocol");
+    /// Construct two transcript challenges and check the output is repeatable.
+    fn challenge_scalar() {
+        // Transcript labels
+        let protocol = b"test protocol";
+        let challenge = b"challenge";
 
-        let real_scalar: Scalar = real_transcript.challenge_scalar::<Affine>(b"challenge");
-        let test_scalar: Scalar = test_transcript.challenge_scalar::<Affine>(b"challenge");
+        let mut real_transcript = Transcript::new(protocol);
+        let real_scalar = real_transcript.challenge_scalar::<Affine>(challenge);
+
+        let mut test_transcript = TestTranscript::new(protocol);
+        let test_scalar = test_transcript.challenge_scalar::<Affine>(challenge);
 
         assert_eq!(real_scalar, test_scalar);
     }
 
     #[test]
-    fn test_append_scalar() {
+    fn append_scalar() {
         let mut real_transcript = Transcript::new(b"test protocol");
         let mut test_transcript = TestTranscript::new(b"test protocol");
 
