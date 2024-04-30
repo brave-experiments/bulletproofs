@@ -1,8 +1,7 @@
 //! Definition of the constraint system trait.
 
-use super::linear_combination::{LinearCombination, Variable};
-use super::R1CSError;
-use ark_ff::Field;
+use super::{LinearCombination, R1CSError, Variable};
+use ark_ff::PrimeField;
 use merlin::Transcript;
 
 /// The interface for a constraint system, abstracting over the prover
@@ -17,9 +16,7 @@ use merlin::Transcript;
 /// verifier, gadgets for the constraint system should be written
 /// using the `ConstraintSystem` trait, so that the prover and
 /// verifier share the logic for specifying constraints.
-pub trait ConstraintSystem<F: Field> {
-    // type Scalar: Field;
-
+pub trait ConstraintSystem<F: PrimeField> {
     /// Leases the proof transcript to the user, so they can
     /// add extra data to which the proof must be bound, but which
     /// is not available before creation of the constraint system.
@@ -69,8 +66,8 @@ pub trait ConstraintSystem<F: Field> {
         input_assignments: Option<(F, F)>,
     ) -> Result<(Variable<F>, Variable<F>, Variable<F>), R1CSError>;
 
-    /// Counts the amount of constraints in the constraint system.
-    fn metrics(&self) -> crate::r1cs::Metrics;
+    /// Counts the amount of allocated multipliers.
+    fn multipliers_len(&self) -> usize;
 
     /// Enforce the explicit constraint that
     /// ```text
@@ -84,7 +81,7 @@ pub trait ConstraintSystem<F: Field> {
 /// while gadgets that need randomization should use trait bound `CS: RandomizedConstraintSystem`.
 /// Gadgets generally _should not_ use this trait as a bound on the CS argument: it should be used
 /// by the higher-order protocol that composes gadgets together.
-pub trait RandomizableConstraintSystem<F: Field>: ConstraintSystem<F> {
+pub trait RandomizableConstraintSystem<F: PrimeField>: ConstraintSystem<F> {
     /// Represents a concrete type for the CS in a randomization phase.
     type RandomizedCS: RandomizedConstraintSystem<F>;
 
@@ -107,9 +104,9 @@ pub trait RandomizableConstraintSystem<F: Field>: ConstraintSystem<F> {
     ///     // ...
     /// })
     /// ```
-    fn specify_randomized_constraints<F2>(&mut self, callback: F2) -> Result<(), R1CSError>
+    fn specify_randomized_constraints<FF>(&mut self, callback: FF) -> Result<(), R1CSError>
     where
-        F2: 'static + FnOnce(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
+        FF: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
 }
 
 /// Represents a constraint system in the second phase:
@@ -117,7 +114,7 @@ pub trait RandomizableConstraintSystem<F: Field>: ConstraintSystem<F> {
 ///
 /// Note: this trait also includes `ConstraintSystem` trait
 /// in order to allow composition of gadgets: e.g. a shuffle gadget can be used in both phases.
-pub trait RandomizedConstraintSystem<F: Field>: ConstraintSystem<F> {
+pub trait RandomizedConstraintSystem<F: PrimeField>: ConstraintSystem<F> {
     /// Generates a challenge scalar.
     ///
     /// ### Usage

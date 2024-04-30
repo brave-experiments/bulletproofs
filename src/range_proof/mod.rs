@@ -1,17 +1,18 @@
 #![allow(non_snake_case)]
-#![doc = include_str!("../../docs/range-proof-protocol.md")]
 
-extern crate alloc;
-
-use alloc::vec::Vec;
 use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
 use ark_ff::{Field, PrimeField, UniformRand};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::rand::{prelude::thread_rng, Rng};
-use ark_std::One;
-
-use core::iter;
-use std::marker::PhantomData;
+use ark_std::{
+    io::Cursor,
+    io::{Read, Write},
+    iter,
+    ops::{AddAssign, Neg, Sub},
+    rand::{CryptoRng, RngCore},
+    vec,
+    vec::Vec,
+    One, Zero,
+};
 
 use merlin::Transcript;
 
@@ -22,6 +23,7 @@ use crate::transcript::TranscriptProtocol;
 use crate::util;
 
 // Modules for MPC protocol
+
 pub mod dealer;
 pub mod messages;
 pub mod party;
@@ -49,41 +51,64 @@ pub mod party;
 /// protocol locally.  That API is exposed in the [`aggregation`](::range_proof_mpc)
 /// module and can be used to perform online aggregation between
 /// parties without revealing secret values to each other.
-#[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
-pub struct RangeProof<C: AffineRepr, F: Field + PrimeField> {
+#[derive(Clone, Debug)]
+pub struct RangeProof<G: AffineRepr> {
     /// Commitment to the bits of the value
-    A: C,
+    A: G,
     /// Commitment to the blinding factors
-    S: C,
+    S: G,
     /// Commitment to the \\(t_1\\) coefficient of \\( t(x) \\)
-    T_1: C,
+    T_1: G,
     /// Commitment to the \\(t_2\\) coefficient of \\( t(x) \\)
-    T_2: C,
+    T_2: G,
     /// Evaluation of the polynomial \\(t(x)\\) at the challenge point \\(x\\)
-    t_x: C::ScalarField,
+    t_x: G::ScalarField,
     /// Blinding factor for the synthetic commitment to \\(t(x)\\)
-    t_x_blinding: C::ScalarField,
+    t_x_blinding: G::ScalarField,
     /// Blinding factor for the synthetic commitment to the inner-product arguments
-    e_blinding: C::ScalarField,
+    e_blinding: G::ScalarField,
     /// Proof data for the inner-product argument.
-    ipp_proof: InnerProductProof<C>,
-    _marker_f: PhantomData<F>,
+    ipp_proof: InnerProductProof<G>,
 }
 
-impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
+impl<G: AffineRepr> RangeProof<G> {
+    /// Create a rangeproof for a given pair of value `v` and
+    /// blinding scalar `v_blinding`.
+    /// This is a convenience wrapper around [`RangeProof::prove_multiple`].
+    pub fn prove_single_with_rng<T: RngCore + CryptoRng>(
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
+        transcript: &mut Transcript,
+        v: u64,
+        v_blinding: &G::ScalarField,
+        n: usize,
+        rng: &mut T,
+    ) -> Result<(RangeProof<G>, G), ProofError> {
+        let (p, Vs) = RangeProof::prove_multiple_with_rng(
+            bp_gens,
+            pc_gens,
+            transcript,
+            &[v],
+            &[(*v_blinding).clone()],
+            n,
+            rng,
+        )?;
+        Ok((p, Vs[0].clone()))
+    }
+
     /// Create a rangeproof for a given pair of value `v` and
     /// blinding scalar `v_blinding`.
     /// This is a convenience wrapper around [`RangeProof::prove_single_with_rng`],
     /// passing in a threadsafe RNG.
     #[cfg(feature = "std")]
     pub fn prove_single(
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
         v: u64,
-        v_blinding: &C::ScalarField,
+        v_blinding: &G::ScalarField,
         n: usize,
-    ) -> Result<(RangeProof<C, F>, C), ProofError> {
+    ) -> Result<(RangeProof<G>, G), ProofError> {
         RangeProof::prove_single_with_rng(
             bp_gens,
             pc_gens,
@@ -91,45 +116,20 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
             v,
             v_blinding,
             n,
-            &mut thread_rng(),
+            &mut ark_std::rand::thread_rng(),
         )
     }
 
-    /// Create a rangeproof for a given pair of value `v` and
-    /// blinding scalar `v_blinding`.
-    /// This is a convenience wrapper around [`RangeProof::prove_multiple`].
-    /// ```
-    pub fn prove_single_with_rng<R: Rng>(
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
-        transcript: &mut Transcript,
-        v: u64,
-        v_blinding: &C::ScalarField,
-        n: usize,
-        rng: &mut R,
-    ) -> Result<(RangeProof<C, F>, C), ProofError> {
-        let (p, Vs) = RangeProof::prove_multiple_with_rng(
-            bp_gens,
-            pc_gens,
-            transcript,
-            &[v],
-            &[*v_blinding],
-            n,
-            rng,
-        )?;
-        Ok((p, Vs[0]))
-    }
-
     /// Create a rangeproof for a set of values.
-    pub fn prove_multiple_with_rng<R: Rng>(
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+    pub fn prove_multiple_with_rng<T: RngCore + CryptoRng>(
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
         values: &[u64],
-        blindings: &[C::ScalarField],
+        blindings: &[G::ScalarField],
         n: usize,
-        rng: &mut R,
-    ) -> Result<(RangeProof<C, F>, Vec<C>), ProofError> {
+        rng: &mut T,
+    ) -> Result<(RangeProof<G>, Vec<G>), ProofError> {
         use self::dealer::*;
         use self::party::*;
 
@@ -142,7 +142,7 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
         let parties: Vec<_> = values
             .iter()
             .zip(blindings.iter())
-            .map(|(&v, &v_blinding)| Party::<C, F>::new(bp_gens, pc_gens, v, v_blinding, n))
+            .map(|(&v, &v_blinding)| Party::new(bp_gens, pc_gens, v, v_blinding, n))
             // Collect the iterator of Results into a Result<Vec>, then unwrap it
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -182,13 +182,13 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
     /// passing in a threadsafe RNG.
     #[cfg(feature = "std")]
     pub fn prove_multiple(
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
         values: &[u64],
-        blindings: &[C::ScalarField],
+        blindings: &[G::ScalarField],
         n: usize,
-    ) -> Result<(RangeProof<C, F>, Vec<C>), ProofError> {
+    ) -> Result<(RangeProof<G>, Vec<G>), ProofError> {
         RangeProof::prove_multiple_with_rng(
             bp_gens,
             pc_gens,
@@ -196,51 +196,97 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
             values,
             blindings,
             n,
-            &mut thread_rng(),
+            &mut ark_std::rand::thread_rng(),
         )
+    }
+
+    /// Verifies a rangeproof for a given value commitment \\(V\\).
+    ///
+    /// This is a convenience wrapper around `verify_multiple` for the `m=1` case.
+    pub fn verify_single_with_rng<T: RngCore + CryptoRng>(
+        &self,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
+        transcript: &mut Transcript,
+        V: &G,
+        n: usize,
+        rng: &mut T,
+    ) -> Result<(), ProofError> {
+        self.verify_multiple_with_rng(bp_gens, pc_gens, transcript, &[(*V).clone()], n, rng)
     }
 
     /// Verifies a rangeproof for a given value commitment \\(V\\).
     ///
     /// This is a convenience wrapper around [`RangeProof::verify_single_with_rng`],
     /// passing in a threadsafe RNG.
-    //#[cfg(feature = "std")]
+    #[cfg(feature = "std")]
     pub fn verify_single(
         &self,
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
-        V: &C,
+        V: &G,
         n: usize,
     ) -> Result<(), ProofError> {
-        self.verify_single_with_rng(bp_gens, pc_gens, transcript, V, n, &mut thread_rng())
-    }
-
-    /// Verifies a rangeproof for a given value commitment \\(V\\).
-    ///
-    /// This is a convenience wrapper around `verify_multiple` for the `m=1` case.
-    pub fn verify_single_with_rng<R: Rng>(
-        &self,
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
-        transcript: &mut Transcript,
-        V: &C,
-        n: usize,
-        rng: &mut R,
-    ) -> Result<(), ProofError> {
-        self.verify_multiple_with_rng(bp_gens, pc_gens, transcript, &[*V], n, rng)
+        self.verify_single_with_rng(
+            bp_gens,
+            pc_gens,
+            transcript,
+            V,
+            n,
+            &mut ark_std::rand::thread_rng(),
+        )
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
-    pub fn verify_multiple_with_rng<R: Rng>(
+    pub fn verify_multiple_with_rng<T: RngCore + CryptoRng>(
         &self,
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
-        value_commitments: &[C],
+        value_commitments: &[G],
         n: usize,
-        rng: &mut R,
+        rng: &mut T,
     ) -> Result<(), ProofError> {
+        let m = value_commitments.len();
+
+        let scalars = self
+            .compute_verification_scalars_with_rng(bp_gens, transcript, value_commitments, n, rng)?
+            .iter()
+            .map(|f| *f)
+            .collect::<Vec<G::ScalarField>>();
+
+        let mega_check = G::Group::msm(
+            &iter::once(self.A.clone())
+                .chain(iter::once(self.S.clone()))
+                .chain(iter::once(self.T_1.clone()))
+                .chain(iter::once(self.T_2.clone()))
+                .chain(self.ipp_proof.L_vec.iter().map(|L| L.clone()))
+                .chain(self.ipp_proof.R_vec.iter().map(|R| R.clone()))
+                .chain(value_commitments.iter().map(|V| V.clone()))
+                .chain(iter::once(pc_gens.B_blinding.clone()))
+                .chain(iter::once(pc_gens.B.clone()))
+                .chain(bp_gens.G(n, m).map(|&x| x))
+                .chain(bp_gens.H(n, m).map(|&x| x))
+                .collect::<Vec<G>>(),
+            &scalars,
+        );
+
+        if mega_check.unwrap().is_zero() {
+            Ok(())
+        } else {
+            Err(ProofError::VerificationError)
+        }
+    }
+    /// Compute multiexponentiation scalars needed to verify this proofs
+    pub fn compute_verification_scalars_with_rng<T: RngCore + CryptoRng>(
+        &self,
+        bp_gens: &BulletproofGens<G>,
+        transcript: &mut Transcript,
+        value_commitments: &[G],
+        n: usize,
+        rng: &mut T,
+    ) -> Result<Vec<G::ScalarField>, ProofError> {
         let m = value_commitments.len();
 
         // First, replay the "interactive" protocol using the proof
@@ -255,7 +301,9 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
             return Err(ProofError::InvalidGeneratorsLength);
         }
 
-        transcript.rangeproof_domain_sep(n as u64, m as u64);
+        <Transcript as TranscriptProtocol<G>>::rangeproof_domain_sep(
+            transcript, n as u64, m as u64,
+        );
 
         for V in value_commitments.iter() {
             // Allow the commitments to be zero (0 value, 0 blinding)
@@ -266,97 +314,203 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
         transcript.validate_and_append_point(b"A", &self.A)?;
         transcript.validate_and_append_point(b"S", &self.S)?;
 
-        let y = transcript.challenge_scalar::<C>(b"y");
-        let z = transcript.challenge_scalar::<C>(b"z");
-        let zz = z * z;
-        let minus_z = -z;
+        let y: G::ScalarField =
+            <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"y");
+        let z: G::ScalarField =
+            <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"z");
+        let zz = z * &z;
+        let minus_z = z.neg();
 
         transcript.validate_and_append_point(b"T_1", &self.T_1)?;
         transcript.validate_and_append_point(b"T_2", &self.T_2)?;
 
-        let x = transcript.challenge_scalar::<C>(b"x");
+        let x = <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"x");
 
-        transcript.append_scalar::<C>(b"t_x", &self.t_x);
-        transcript.append_scalar::<C>(b"t_x_blinding", &self.t_x_blinding);
-        transcript.append_scalar::<C>(b"e_blinding", &self.e_blinding);
+        <Transcript as TranscriptProtocol<G>>::append_scalar(transcript, b"t_x", &self.t_x);
+        <Transcript as TranscriptProtocol<G>>::append_scalar(
+            transcript,
+            b"t_x_blinding",
+            &self.t_x_blinding,
+        );
+        <Transcript as TranscriptProtocol<G>>::append_scalar(
+            transcript,
+            b"e_blinding",
+            &self.e_blinding,
+        );
 
-        let w = transcript.challenge_scalar::<C>(b"w");
+        let w: G::ScalarField =
+            <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"w");
 
         // Challenge value for batching statements to be verified
-        let c = C::ScalarField::rand(rng);
+        let c = G::ScalarField::rand(rng);
 
-        let (x_sq, x_inv_sq, s) = self.ipp_proof.verification_scalars(n * m, transcript)?;
+        let (mut x_sq, mut x_inv_sq, s) = self.ipp_proof.verification_scalars(n * m, transcript)?;
         let s_inv = s.iter().rev();
 
-        let a = self.ipp_proof.a;
-        let b = self.ipp_proof.b;
+        let a: G::ScalarField = self.ipp_proof.a.clone();
+        let b: G::ScalarField = self.ipp_proof.b.clone();
 
         // Construct concat_z_and_2, an iterator of the values of
         // z^0 * \vec(2)^n || z^1 * \vec(2)^n || ... || z^(m-1) * \vec(2)^n
-        let powers_of_2: Vec<C::ScalarField> =
-            util::exp_iter(C::ScalarField::from(2u64)).take(n).collect();
-        let concat_z_and_2: Vec<C::ScalarField> = util::exp_iter(z)
+        let powers_of_2: Vec<G::ScalarField> = util::exp_iter::<G>(G::ScalarField::from(2u64))
+            .take(n)
+            .collect();
+        let concat_z_and_2: Vec<G::ScalarField> = util::exp_iter::<G>(z.clone())
             .take(m)
-            .flat_map(|exp_z| powers_of_2.iter().map(move |exp_2| (*exp_2) * exp_z))
+            .flat_map(|exp_z| powers_of_2.iter().map(move |exp_2| *exp_2 * exp_z))
             .collect();
 
-        let g = s.iter().map(|s_i| minus_z - a * s_i);
-        let h = s_inv
-            .zip(util::exp_iter(y.inverse().unwrap()))
+        let mut g: Vec<G::ScalarField> = s.iter().map(|s_i| minus_z - a * s_i).collect();
+        let mut h: Vec<G::ScalarField> = s_inv
+            .zip(util::exp_iter::<G>(y.inverse().unwrap()))
             .zip(concat_z_and_2.iter())
-            .map(|((s_i_inv, exp_y_inv), z_and_2)| z + exp_y_inv * (zz * z_and_2 - b * s_i_inv));
+            .map(|((s_i_inv, exp_y_inv), z_and_2)| z + exp_y_inv * (zz * z_and_2 - b * s_i_inv))
+            .collect();
 
-        let value_commitment_scalars = util::exp_iter(z).take(m).map(|z_exp| c * zz * z_exp);
-        let basepoint_scalar = w * (self.t_x - a * b) + c * (delta(n, m, &y, &z) - self.t_x);
+        let mut value_commitment_scalars: Vec<G::ScalarField> = util::exp_iter::<G>(z.clone())
+            .take(m)
+            .map(|z_exp| c * &zz * &z_exp)
+            .collect();
 
-        let mega_check = C::Group::msm(
-            iter::once(self.A)
-                .chain(iter::once(self.S))
-                .chain(iter::once(self.T_1))
-                .chain(iter::once(self.T_2))
-                .chain(self.ipp_proof.L_vec.iter().map(|L| L.clone()))
-                .chain(self.ipp_proof.R_vec.iter().map(|R| R.clone()))
-                .chain(iter::once(Some(pc_gens.B_blinding).unwrap()))
-                .chain(iter::once(Some(pc_gens.B).unwrap()))
-                .chain(bp_gens.G(n, m).map(|&x| Some(x).unwrap()))
-                .chain(bp_gens.H(n, m).map(|&x| Some(x).unwrap()))
-                .chain(value_commitments.iter().map(|V| V.clone()))
-                .collect::<Vec<C>>()
-                .as_slice(),
-            iter::once(C::ScalarField::one())
-                .chain(iter::once(x))
-                .chain(iter::once(c * x))
-                .chain(iter::once(c * x * x))
-                .chain(x_sq.iter().cloned())
-                .chain(x_inv_sq.iter().cloned())
-                .chain(iter::once(-self.e_blinding - c * self.t_x_blinding))
-                .chain(iter::once(basepoint_scalar))
-                .chain(g)
-                .chain(h)
-                .chain(value_commitment_scalars)
-                .collect::<Vec<C::ScalarField>>()
-                .as_slice(),
-        )
-        .map_err(|_| ProofError::InvalidInputLength)?;
+        let tmp: G::ScalarField = delta::<G>(n, m, &y, &z);
+        let basepoint_scalar: G::ScalarField = w * (self.t_x - a * b) + c * (tmp - &self.t_x);
 
-        if mega_check.into_affine().is_zero() {
-            Ok(())
-        } else {
-            Err(ProofError::VerificationError)
+        let mut scalars = vec![
+            G::ScalarField::one(), // A
+            x,                     // S
+            c * &x,                // T_1
+            c * &x * &x,
+        ]; //T_2
+        scalars.append(&mut x_sq); // L_vec TODO avoid append, better chaining iterators
+        scalars.append(&mut x_inv_sq); // R_vec
+        scalars.append(&mut value_commitment_scalars); //Value com
+        scalars.push(self.e_blinding.neg() - &(c * &self.t_x_blinding)); // B_blinding
+        scalars.push(basepoint_scalar); // B
+        scalars.append(&mut g); // G_vec
+        scalars.append(&mut h); // H_vec
+        Ok(scalars)
+    }
+
+    /// Verifies multiple aggregated rangeproofs with a single multiexponentiation
+    pub fn batch_verify<T: RngCore + CryptoRng>(
+        rng: &mut T,
+        proofs: &[&RangeProof<G>],
+        transcripts: &mut [Transcript],
+        value_commitments: &[&[G]],
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
+        n: usize,
+    ) -> Result<(), ProofError> {
+        let mut all_scalars = vec![];
+        let mut random_scalars = vec![];
+        let mut max_m = 0;
+        for ((proof, transcript), value_commitment) in proofs
+            .iter()
+            .zip(transcripts.iter_mut())
+            .zip(value_commitments.iter())
+        {
+            let instance_scalars = proof.compute_verification_scalars_with_rng(
+                bp_gens,
+                transcript,
+                value_commitment,
+                n,
+                rng,
+            )?;
+            let mut rng = transcript
+                .build_rng()
+                .finalize(&mut ark_std::rand::thread_rng());
+            random_scalars.push(G::ScalarField::rand(&mut rng));
+            all_scalars.push((instance_scalars, value_commitment.len()));
         }
+        let mut all_scaled_scalars = vec![];
+        for ((scalars, m_i), rand_scalar) in all_scalars.iter().zip(random_scalars.iter()) {
+            let scaled_scalars: Vec<G::ScalarField> =
+                scalars.iter().map(|s| *s * rand_scalar).collect();
+            all_scaled_scalars.push((scaled_scalars, *m_i));
+            if *m_i > max_m {
+                max_m = *m_i;
+            }
+        }
+        let grouped_scalars = Self::group_scalars(all_scaled_scalars.as_slice(), n, max_m)
+            .iter()
+            .map(|f| *f)
+            .collect::<Vec<G::ScalarField>>();
+
+        let mut elems = vec![];
+        for (proof, value_commitments) in proofs.iter().zip(value_commitments) {
+            elems.push(proof.A.clone());
+            elems.push(proof.S.clone());
+            elems.push(proof.T_1.clone());
+            elems.push(proof.T_2.clone());
+            for L in proof.ipp_proof.L_vec.iter() {
+                elems.push(L.clone());
+            }
+            for R in proof.ipp_proof.R_vec.iter() {
+                elems.push(R.clone());
+            }
+            for V in value_commitments.iter() {
+                elems.push(V.clone())
+            }
+        }
+        elems.push(pc_gens.B_blinding.clone());
+        elems.push(pc_gens.B.clone());
+        for G in bp_gens.G(n, max_m) {
+            elems.push((*G).clone());
+        }
+        for H in bp_gens.H(n, max_m) {
+            elems.push((*H).clone());
+        }
+        let mega_check = G::Group::msm(&elems, &grouped_scalars);
+        if !mega_check.unwrap().is_zero() {
+            return Err(ProofError::VerificationError);
+        }
+        Ok(())
+    }
+
+    fn group_scalars(
+        all_scalars: &[(Vec<G::ScalarField>, usize)],
+        n: usize,
+        max_m: usize,
+    ) -> Vec<G::ScalarField> {
+        let mut agg_scalars = vec![];
+        let mut b_blind_scalars = G::ScalarField::from(0u8);
+        let mut b_scalars = G::ScalarField::from(0u8);
+        let mut g_scalars = vec![G::ScalarField::from(0u8); n * max_m];
+        let mut h_scalars = vec![G::ScalarField::from(0u8); n * max_m];
+
+        for (instance_scalars, m_i) in all_scalars {
+            let N_i = *m_i * n; // size of this instance
+            let lgN = (N_i as u64).trailing_zeros() as usize; // size of L and R vecs
+                                                              // A,S,T1,T2 (4 elements) and L_vec, R_vec (lgN elemens each) + V (m_i elements)
+            let k_i = 4usize + 2usize * lgN + *m_i; // number of elements unique to this instance
+            for j in 0..k_i {
+                agg_scalars.push((*instance_scalars.get(j as usize).unwrap()).clone());
+            }
+            b_blind_scalars.add_assign(&instance_scalars[k_i]);
+            b_scalars.add_assign(&instance_scalars[k_i + 1]);
+            for i in k_i + 2..k_i + 2 + N_i {
+                g_scalars[i - k_i - 2] += &instance_scalars[i];
+                h_scalars[i - k_i - 2] += &instance_scalars[N_i + i];
+            }
+        }
+        agg_scalars.push(b_blind_scalars);
+        agg_scalars.push(b_scalars);
+        agg_scalars.append(&mut g_scalars);
+        agg_scalars.append(&mut h_scalars);
+
+        agg_scalars
     }
 
     /// Verifies an aggregated rangeproof for the given value commitments.
     /// This is a convenience wrapper around [`RangeProof::verify_multiple_with_rng`],
     /// passing in a threadsafe RNG.
-    // Currently not needed in rewards proofs
     #[cfg(feature = "std")]
     pub fn verify_multiple(
         &self,
-        bp_gens: &BulletproofGens<C>,
-        pc_gens: &PedersenGens<C>,
+        bp_gens: &BulletproofGens<G>,
+        pc_gens: &PedersenGens<G>,
         transcript: &mut Transcript,
-        value_commitments: &[C],
+        value_commitments: &[G],
         n: usize,
     ) -> Result<(), ProofError> {
         self.verify_multiple_with_rng(
@@ -365,7 +519,7 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
             transcript,
             value_commitments,
             n,
-            &mut thread_rng(),
+            &mut ark_std::rand::thread_rng(),
         )
     }
 }
@@ -374,32 +528,44 @@ impl<C: AffineRepr, F: Field + PrimeField> RangeProof<C, F> {
 /// \\[
 /// \delta(y,z) = (z - z^{2}) \langle \mathbf{1}, {\mathbf{y}}^{n \cdot m} \rangle - \sum_{j=0}^{m-1} z^{j+3} \cdot \langle \mathbf{1}, {\mathbf{2}}^{n \cdot m} \rangle
 /// \\]
-fn delta<S: Field>(n: usize, m: usize, y: &S, z: &S) -> S {
-    let sum_y = util::sum_of_powers(y, n * m);
-    let sum_2 = util::sum_of_powers(&S::from(2u64), n);
-    let sum_z = util::sum_of_powers(z, m);
+fn delta<G: AffineRepr>(
+    n: usize,
+    m: usize,
+    y: &G::ScalarField,
+    z: &G::ScalarField,
+) -> G::ScalarField {
+    let sum_y = util::sum_of_powers::<G>(y, n * m);
+    let sum_2 = util::sum_of_powers::<G>(&G::ScalarField::from(2u64), n);
+    let sum_z = util::sum_of_powers::<G>(z, m);
 
-    ((*z) - (*z) * z) * sum_y - (*z) * z * z * sum_2 * sum_z
+    (*z - *z * z) * &sum_y - *z * z * z * sum_2 * sum_z
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use ark_ff::{One, Zero};
-
-    use ark_ec::short_weierstrass::Affine;
-    use ark_secp256r1::{Config as SecpConfig, Fq as SecpBaseField};
-
-    type Scalar = <Affine<SecpConfig> as AffineRepr>::ScalarField;
-
-    const TEST_LABEL: &[u8] = b"AggregatedRangeProofTest";
+    use crate::generators::PedersenGens;
+    use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
+    use ark_ff::{Field, PrimeField, UniformRand};
+    use ark_secq256k1::{Affine, Fr};
+    use ark_std::{
+        io::Cursor,
+        io::{Read, Write},
+        iter,
+        ops::{AddAssign, Neg, Sub},
+        rand::Rng,
+        rand::{CryptoRng, RngCore},
+        vec,
+        vec::Vec,
+        One, Zero,
+    };
 
     #[test]
     fn test_delta() {
         let mut rng = rand::thread_rng();
-        let y = Scalar::rand(&mut rng);
-        let z = Scalar::rand(&mut rng);
+        let y = Fr::rand(&mut rng);
+        let z = Fr::rand(&mut rng);
 
         // Choose n = 256 to ensure we overflow the group order during
         // the computation, to check that that's done correctly
@@ -408,17 +574,17 @@ mod tests {
         // code copied from previous implementation
         let z2 = z * z;
         let z3 = z2 * z;
-        let mut power_g = Scalar::zero();
-        let mut exp_y = Scalar::one(); // start at y^0 = 1
-        let mut exp_2 = Scalar::one(); // start at 2^0 = 1
+        let mut power_g = Fr::zero();
+        let mut exp_y = Fr::one(); // start at y^0 = 1
+        let mut exp_2 = Fr::one(); // start at 2^0 = 1
         for _ in 0..n {
             power_g += (z - z2) * exp_y - z3 * exp_2;
 
-            exp_y = exp_y * y; // y^i -> y^(i+1)
-            exp_2 = exp_2 + exp_2; // 2^i -> 2^(i+1)
+            exp_y = exp_y * &y; // y^i -> y^(i+1)
+            exp_2 = exp_2 + &exp_2; // 2^i -> 2^(i+1)
         }
 
-        assert_eq!(power_g, delta(n, 1, &y, &z),);
+        assert_eq!(power_g, delta::<Affine>(n, 1, &y, &z),);
     }
 
     /// Given a bitsize `n`, test the following:
@@ -427,18 +593,16 @@ mod tests {
     /// 2. Serialize to wire format;
     /// 3. Deserialize from wire format;
     /// 4. Verify the proof.
-    fn singleparty_create_and_verify_helper<C, F>(n: usize, m: usize)
-    where
-        C: AffineRepr,
-        F: Field + PrimeField,
-    {
+    fn singleparty_create_and_verify_helper(n: usize, m: usize) {
         // Split the test into two scopes, so that it's explicit what
         // data is shared between the prover and the verifier.
 
+        // Use bincode for serialization
+
         // Both prover and verifier have access to the generators and the proof
-        let max_bitsize = 64;
+        let max_bitsize = 128;
         let max_parties = 8;
-        let pc_gens = PedersenGens::default();
+        let pc_gens: PedersenGens<Affine> = PedersenGens::default();
         let bp_gens = BulletproofGens::new(max_bitsize, max_parties);
 
         // Prover's scope
@@ -448,12 +612,11 @@ mod tests {
             // 0. Create witness data
             let (min, max) = (0u64, ((1u128 << n) - 1) as u64);
             let values: Vec<u64> = (0..m).map(|_| rng.gen_range(min..max)).collect();
-            let blindings: Vec<C::ScalarField> =
-                (0..m).map(|_| C::ScalarField::rand(&mut rng)).collect();
+            let blindings: Vec<Fr> = (0..m).map(|_| Fr::rand(&mut rng)).collect();
 
             // 1. Create the proof
-            let mut transcript = Transcript::new(TEST_LABEL);
-            let (proof, value_commitments) = RangeProof::<C, F>::prove_multiple(
+            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+            let (proof, value_commitments) = RangeProof::prove_multiple(
                 &bp_gens,
                 &pc_gens,
                 &mut transcript,
@@ -463,67 +626,110 @@ mod tests {
             )
             .unwrap();
 
-            // Serialize proof
-            let mut rp = Vec::new();
-            proof.serialize_compressed(&mut rp).unwrap();
+            //let mut tmp = Vec::new();
+            //proof.serialize_compressed(&mut tmp).unwrap();
 
             // 2. Return serialized proof and value commitments
-            (rp, value_commitments)
+            (proof, value_commitments)
         };
 
         // Verifier's scope
         {
             // 3. Deserialize
-            let proof: RangeProof<C, F> =
-                RangeProof::deserialize_compressed(&*proof_bytes).unwrap();
+            //let proof: RangeProof<Affine> =
+            //    RangeProof::deserialize_compressed(&proof_bytes).unwrap();
 
             // 4. Verify with the same customization label as above
-            let mut transcript = Transcript::new(TEST_LABEL);
+            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
 
-            assert!(proof
+            assert!(proof_bytes
                 .verify_multiple(&bp_gens, &pc_gens, &mut transcript, &value_commitments, n)
                 .is_ok());
         }
     }
 
     #[test]
+    fn create_simple() {
+        let max_bitsize = 128;
+        let max_parties = 1;
+        let pc_gens: PedersenGens<Affine> = PedersenGens::default();
+        let bp_gens = BulletproofGens::new(max_bitsize, max_parties);
+
+        // Prover's scope
+        let (proof_bytes, value_commitments) = {
+            let mut rng = rand::thread_rng();
+
+            // 0. Create witness data
+            let (min, max) = (0u64, ((1u128 << 64) - 1) as u64);
+            let value: u64 = rng.gen_range(min..max);
+            let blinding: Fr = Fr::rand(&mut rng);
+
+            // 1. Create the proof
+            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+            let (proof, value_commitments) =
+                RangeProof::prove_single(&bp_gens, &pc_gens, &mut transcript, value, &blinding, 64)
+                    .unwrap();
+
+            //let mut tmp = Vec::new();
+            //proof.serialize_compressed(&mut tmp).unwrap();
+
+            // 2. Return serialized proof and value commitments
+            (proof, value_commitments)
+        };
+
+        // Verifier's scope
+        {
+            // 3. Deserialize
+            //let proof: RangeProof<Affine> =
+            //    RangeProof::deserialize_compressed(&proof_bytes).unwrap();
+
+            // 4. Verify with the same customization label as above
+            let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
+
+            assert!(proof_bytes
+                .verify_single(&bp_gens, &pc_gens, &mut transcript, &value_commitments, 64)
+                .is_ok());
+        }
+    }
+
+    #[test]
     fn create_and_verify_n_32_m_1() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(32, 1);
+        singleparty_create_and_verify_helper(32, 1);
     }
 
     #[test]
     fn create_and_verify_n_32_m_2() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(32, 2);
+        singleparty_create_and_verify_helper(32, 2);
     }
 
     #[test]
     fn create_and_verify_n_32_m_4() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(32, 4);
+        singleparty_create_and_verify_helper(32, 4);
     }
 
     #[test]
     fn create_and_verify_n_32_m_8() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(32, 8);
+        singleparty_create_and_verify_helper(32, 8);
     }
 
     #[test]
     fn create_and_verify_n_64_m_1() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(64, 1);
+        singleparty_create_and_verify_helper(64, 1);
     }
 
     #[test]
     fn create_and_verify_n_64_m_2() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(64, 2);
+        singleparty_create_and_verify_helper(64, 2);
     }
 
     #[test]
     fn create_and_verify_n_64_m_4() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(64, 4);
+        singleparty_create_and_verify_helper(64, 4);
     }
 
     #[test]
     fn create_and_verify_n_64_m_8() {
-        singleparty_create_and_verify_helper::<Affine<SecpConfig>, SecpBaseField>(64, 8);
+        singleparty_create_and_verify_helper(64, 8);
     }
 
     #[test]
@@ -537,46 +743,31 @@ mod tests {
         let m = 4;
         let n = 32;
 
-        let pc_gens = PedersenGens::<Affine<SecpConfig>>::default();
+        let pc_gens: PedersenGens<Affine> = PedersenGens::default();
         let bp_gens = BulletproofGens::new(n, m);
 
         let mut rng = rand::thread_rng();
-        let mut transcript = Transcript::new(TEST_LABEL);
+        let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
 
         // Parties 0, 2 are honest and use a 32-bit value
         let v0 = rng.gen::<u32>() as u64;
-        let v0_blinding = Scalar::rand(&mut rng);
-        let party0 =
-            Party::<Affine<SecpConfig>, SecpBaseField>::new(&bp_gens, &pc_gens, v0, v0_blinding, n)
-                .unwrap();
+        let v0_blinding = Fr::rand(&mut rng);
+        let party0 = Party::new(&bp_gens, &pc_gens, v0, v0_blinding, n).unwrap();
 
         let v2 = rng.gen::<u32>() as u64;
-        let v2_blinding = Scalar::rand(&mut rng);
-        let party2 =
-            Party::<Affine<SecpConfig>, SecpBaseField>::new(&bp_gens, &pc_gens, v2, v2_blinding, n)
-                .unwrap();
+        let v2_blinding = Fr::rand(&mut rng);
+        let party2 = Party::new(&bp_gens, &pc_gens, v2, v2_blinding, n).unwrap();
 
         // Parties 1, 3 are dishonest and use a 64-bit value
         let v1 = rng.gen::<u64>();
-        let v1_blinding = Scalar::rand(&mut rng);
-        let party1 =
-            Party::<Affine<SecpConfig>, SecpBaseField>::new(&bp_gens, &pc_gens, v1, v1_blinding, n)
-                .unwrap();
+        let v1_blinding = Fr::rand(&mut rng);
+        let party1 = Party::new(&bp_gens, &pc_gens, v1, v1_blinding, n).unwrap();
 
         let v3 = rng.gen::<u64>();
-        let v3_blinding = Scalar::rand(&mut rng);
-        let party3 =
-            Party::<Affine<SecpConfig>, SecpBaseField>::new(&bp_gens, &pc_gens, v3, v3_blinding, n)
-                .unwrap();
+        let v3_blinding = Fr::rand(&mut rng);
+        let party3 = Party::new(&bp_gens, &pc_gens, v3, v3_blinding, n).unwrap();
 
-        let dealer = Dealer::<Affine<SecpConfig>, SecpBaseField>::new(
-            &bp_gens,
-            &pc_gens,
-            &mut transcript,
-            n,
-            m,
-        )
-        .unwrap();
+        let dealer = Dealer::new(&bp_gens, &pc_gens, &mut transcript, n, m).unwrap();
 
         let (party0, bit_com0) = party0.assign_position(0).unwrap();
         let (party1, bit_com1) = party1.assign_position(1).unwrap();
@@ -624,26 +815,17 @@ mod tests {
         let m = 1;
         let n = 32;
 
-        let pc_gens = PedersenGens::<Affine<SecpConfig>>::default();
+        let pc_gens: PedersenGens<Affine> = PedersenGens::default();
         let bp_gens = BulletproofGens::new(n, m);
 
         let mut rng = rand::thread_rng();
-        let mut transcript = Transcript::new(TEST_LABEL);
+        let mut transcript = Transcript::new(b"AggregatedRangeProofTest");
 
         let v0 = rng.gen::<u32>() as u64;
-        let v0_blinding = Scalar::rand(&mut rng);
-        let party0 =
-            Party::<Affine<SecpConfig>, SecpBaseField>::new(&bp_gens, &pc_gens, v0, v0_blinding, n)
-                .unwrap();
+        let v0_blinding = Fr::rand(&mut rng);
+        let party0 = Party::new(&bp_gens, &pc_gens, v0, v0_blinding, n).unwrap();
 
-        let dealer = Dealer::<Affine<SecpConfig>, SecpBaseField>::new(
-            &bp_gens,
-            &pc_gens,
-            &mut transcript,
-            n,
-            m,
-        )
-        .unwrap();
+        let dealer = Dealer::new(&bp_gens, &pc_gens, &mut transcript, n, m).unwrap();
 
         // Now do the protocol flow as normal....
 
@@ -657,7 +839,7 @@ mod tests {
             dealer.receive_poly_commitments(vec![poly_com0]).unwrap();
 
         // But now simulate a malicious dealer choosing x = 0
-        poly_challenge.x = Scalar::zero();
+        poly_challenge.x = Fr::zero();
 
         let maybe_share0 = party0.apply_challenge(&poly_challenge);
 

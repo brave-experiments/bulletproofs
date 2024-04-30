@@ -1,31 +1,28 @@
 #![allow(non_snake_case)]
-#![cfg_attr(feature = "docs", doc(include = "../docs/inner-product-protocol.md"))]
 
-extern crate alloc;
-
-use alloc::borrow::Borrow;
-use alloc::vec::Vec;
-
-use ark_ec::{AffineRepr, VariableBaseMSM};
-use ark_ff::{fields::batch_inversion, Field};
+use ark_ec::{AffineRepr, CurveGroup, VariableBaseMSM};
+use ark_ff::{batch_inversion, Field, One, PrimeField, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::One;
-use core::iter;
+use ark_std::{
+    borrow::Borrow,
+    iter,
+    ops::{MulAssign, Neg},
+    vec::Vec,
+};
 use merlin::Transcript;
 
 use crate::errors::ProofError;
 use crate::transcript::TranscriptProtocol;
 
 #[derive(Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
-/// InnerProductProof struct
-pub struct InnerProductProof<C: AffineRepr> {
-    pub(crate) L_vec: Vec<C>,
-    pub(crate) R_vec: Vec<C>,
-    pub(crate) a: C::ScalarField,
-    pub(crate) b: C::ScalarField,
+pub struct InnerProductProof<G: AffineRepr> {
+    pub(crate) L_vec: Vec<G>,
+    pub(crate) R_vec: Vec<G>,
+    pub(crate) a: G::ScalarField,
+    pub(crate) b: G::ScalarField,
 }
 
-impl<C: AffineRepr> InnerProductProof<C> {
+impl<G: AffineRepr> InnerProductProof<G> {
     /// Create an inner-product proof.
     ///
     /// The proof is created with respect to the bases \\(G\\), \\(H'\\),
@@ -39,14 +36,14 @@ impl<C: AffineRepr> InnerProductProof<C> {
     /// either 0 or a power of 2.
     pub fn create(
         transcript: &mut Transcript,
-        Q: &C,
-        G_factors: &[C::ScalarField],
-        H_factors: &[C::ScalarField],
-        mut G_vec: Vec<C>,
-        mut H_vec: Vec<C>,
-        mut a_vec: Vec<C::ScalarField>,
-        mut b_vec: Vec<C::ScalarField>,
-    ) -> InnerProductProof<C> {
+        Q: &G,
+        G_factors: &[G::ScalarField],
+        H_factors: &[G::ScalarField],
+        mut G_vec: Vec<G>,
+        mut H_vec: Vec<G>,
+        mut a_vec: Vec<G::ScalarField>,
+        mut b_vec: Vec<G::ScalarField>,
+    ) -> InnerProductProof<G> {
         // Create slices G, H, a, b backed by their respective
         // vectors.  This lets us reslice as we compress the lengths
         // of the vectors in the main loop below.
@@ -68,7 +65,7 @@ impl<C: AffineRepr> InnerProductProof<C> {
         // All of the input vectors must have a length that is a power of two.
         assert!(n.is_power_of_two());
 
-        transcript.innerproduct_domain_sep(n as u64);
+        <Transcript as TranscriptProtocol<G>>::innerproduct_domain_sep(transcript, n as u64);
 
         let lg_n = n.next_power_of_two().trailing_zeros() as usize;
         let mut L_vec = Vec::with_capacity(lg_n);
@@ -77,52 +74,57 @@ impl<C: AffineRepr> InnerProductProof<C> {
         // If it's the first iteration, unroll the Hprime = H*y_inv scalar mults
         // into multiscalar muls, for performance.
         if n != 1 {
-            n /= 2;
+            n = n / 2;
             let (a_L, a_R) = a.split_at_mut(n);
             let (b_L, b_R) = b.split_at_mut(n);
             let (G_L, G_R) = G.split_at_mut(n);
             let (H_L, H_R) = H.split_at_mut(n);
 
-            let c_L = inner_product(a_L, b_R);
-            let c_R = inner_product(a_R, b_L);
+            let c_L = inner_product(&a_L, &b_R);
+            let c_R = inner_product(&a_R, &b_L);
 
-            let l_scalars: Vec<C::ScalarField> = a_L
-                .iter()
-                .zip(G_factors[n..2 * n].iter())
-                .map(|(a_L_i, g)| *a_L_i * g)
-                .chain(
-                    b_R.iter()
-                        .zip(H_factors[0..n].iter())
-                        .map(|(b_R_i, h)| *b_R_i * h),
-                )
-                .chain(iter::once(c_L))
-                .collect();
-            let l_points: Vec<C> = G_R
+            let bases = G_R
                 .iter()
                 .chain(H_L.iter())
                 .chain(iter::once(Q))
-                .copied()
-                .collect();
-            let L = C::Group::msm_unchecked(l_points.as_slice(), l_scalars.as_slice()).into();
-
-            let r_scalars: Vec<C::ScalarField> = a_R
+                .map(|f| *f)
+                .collect::<Vec<G>>();
+            let scalars = a_L
                 .iter()
-                .zip(G_factors[0..n].iter())
-                .map(|(a_R_i, g)| *a_R_i * g)
+                .zip(G_factors[n..2 * n].into_iter())
+                .map(|(a_L_i, g)| *a_L_i * g)
                 .chain(
-                    b_L.iter()
-                        .zip(H_factors[n..2 * n].iter())
-                        .map(|(b_L_i, h)| *b_L_i * h),
+                    b_R.iter()
+                        .zip(H_factors[0..n].into_iter())
+                        .map(|(b_R_i, h)| *b_R_i * h),
                 )
-                .chain(iter::once(c_R))
-                .collect();
-            let r_points: Vec<C> = G_L
+                .chain(iter::once(c_L))
+                .collect::<Vec<G::ScalarField>>();
+
+            let L = G::Group::msm(&bases, &scalars).unwrap();
+
+            let bases = G_L
                 .iter()
                 .chain(H_R.iter())
                 .chain(iter::once(Q))
-                .copied()
-                .collect();
-            let R = C::Group::msm_unchecked(r_points.as_slice(), r_scalars.as_slice()).into();
+                .map(|f| *f)
+                .collect::<Vec<G>>();
+            let scalars = a_R
+                .iter()
+                .zip(G_factors[0..n].into_iter())
+                .map(|(a_R_i, g)| *a_R_i * g)
+                .chain(
+                    b_L.iter()
+                        .zip(H_factors[n..2 * n].into_iter())
+                        .map(|(b_L_i, h)| *b_L_i * h),
+                )
+                .chain(iter::once(c_R))
+                .collect::<Vec<G::ScalarField>>();
+
+            let R = G::Group::msm(&bases, &scalars).unwrap();
+
+            let L = L.into_affine();
+            let R = R.into_affine();
 
             L_vec.push(L);
             R_vec.push(R);
@@ -130,26 +132,27 @@ impl<C: AffineRepr> InnerProductProof<C> {
             transcript.append_point(b"L", &L);
             transcript.append_point(b"R", &R);
 
-            let u = transcript.challenge_scalar::<C>(b"u");
-            let u_inv = if let Some(res) = u.inverse() {
-                res
-            } else {
-                panic!("u challenge is zero");
-            };
+            let u = <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"u");
+
+            let u_inv = u.inverse().unwrap();
 
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = C::Group::msm_unchecked(
+
+                G_L[i] = G::Group::msm(
                     &[G_L[i], G_R[i]],
-                    &[(u_inv * G_factors[i]), (u * G_factors[n + i])],
+                    &[u_inv * G_factors[i], u * G_factors[n + i]],
                 )
-                .into();
-                H_L[i] = C::Group::msm_unchecked(
+                .unwrap()
+                .into_affine();
+
+                H_L[i] = G::Group::msm(
                     &[H_L[i], H_R[i]],
-                    &[(u * H_factors[i]), (u_inv * H_factors[n + i])],
+                    &[u * H_factors[i], u_inv * H_factors[n + i]],
                 )
-                .into();
+                .unwrap()
+                .into_affine();
             }
 
             a = a_L;
@@ -159,46 +162,47 @@ impl<C: AffineRepr> InnerProductProof<C> {
         }
 
         while n != 1 {
-            n /= 2;
+            n = n / 2;
             let (a_L, a_R) = a.split_at_mut(n);
             let (b_L, b_R) = b.split_at_mut(n);
             let (G_L, G_R) = G.split_at_mut(n);
             let (H_L, H_R) = H.split_at_mut(n);
 
-            let c_L = inner_product(a_L, b_R);
-            let c_R = inner_product(a_R, b_L);
+            let c_L = inner_product(&a_L, &b_R);
+            let c_R = inner_product(&a_R, &b_L);
 
-            let L = C::Group::msm_unchecked(
-                G_R.iter()
-                    .chain(H_L.iter())
-                    .chain(iter::once(Q))
-                    .copied()
-                    .collect::<Vec<C>>()
-                    .as_slice(),
-                a_L.iter()
-                    .chain(b_R.iter())
-                    .chain(iter::once(&c_L))
-                    .copied()
-                    .collect::<Vec<C::ScalarField>>()
-                    .as_slice(),
-            )
-            .into();
+            let bases = G_R
+                .iter()
+                .chain(H_L.iter())
+                .chain(iter::once(Q))
+                .map(|f| *f)
+                .collect::<Vec<G>>();
+            let scalars = a_L
+                .iter()
+                .chain(b_R.iter())
+                .chain(iter::once(&c_L))
+                .map(|f| *f)
+                .collect::<Vec<G::ScalarField>>();
 
-            let R = C::Group::msm_unchecked(
-                G_L.iter()
-                    .chain(H_R.iter())
-                    .chain(iter::once(Q))
-                    .copied()
-                    .collect::<Vec<C>>()
-                    .as_slice(),
-                a_R.iter()
-                    .chain(b_L.iter())
-                    .chain(iter::once(&c_R))
-                    .copied()
-                    .collect::<Vec<C::ScalarField>>()
-                    .as_slice(),
-            )
-            .into();
+            let L = G::Group::msm(&bases, &scalars).unwrap();
+
+            let bases = G_L
+                .iter()
+                .chain(H_R.iter())
+                .chain(iter::once(Q))
+                .map(|f| *f)
+                .collect::<Vec<G>>();
+            let scalars = a_R
+                .iter()
+                .chain(b_L.iter())
+                .chain(iter::once(&c_R))
+                .map(|f| *f)
+                .collect::<Vec<G::ScalarField>>();
+
+            let R = G::Group::msm(&bases, &scalars).unwrap();
+
+            let L = L.into_affine();
+            let R = R.into_affine();
 
             L_vec.push(L);
             R_vec.push(R);
@@ -206,25 +210,24 @@ impl<C: AffineRepr> InnerProductProof<C> {
             transcript.append_point(b"L", &L);
             transcript.append_point(b"R", &R);
 
-            let u = transcript.challenge_scalar::<C>(b"u");
-            let u_inv = if let Some(res) = u.inverse() {
-                res
-            } else {
-                panic!("u challenge is zero");
-            };
+            let u = <Transcript as TranscriptProtocol<G>>::challenge_scalar(transcript, b"u");
+            let u_inv = u.inverse().unwrap();
 
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = C::Group::msm_unchecked(&[G_L[i], G_R[i]], &[u_inv, u]).into();
-                H_L[i] = C::Group::msm_unchecked(&[H_L[i], H_R[i]], &[u, u_inv]).into();
+                G_L[i] = G::Group::msm(&[G_L[i], G_R[i]], &[u_inv, u])
+                    .unwrap()
+                    .into_affine();
+                H_L[i] = G::Group::msm(&[H_L[i], H_R[i]], &[u, u_inv])
+                    .unwrap()
+                    .into_affine()
             }
 
             a = a_L;
             b = b_L;
             G = G_L;
             H = H_L;
-            // todo collapse iteration one and rest?
         }
 
         InnerProductProof {
@@ -244,9 +247,9 @@ impl<C: AffineRepr> InnerProductProof<C> {
         transcript: &mut Transcript,
     ) -> Result<
         (
-            Vec<C::ScalarField>,
-            Vec<C::ScalarField>,
-            Vec<C::ScalarField>,
+            Vec<G::ScalarField>,
+            Vec<G::ScalarField>,
+            Vec<G::ScalarField>,
         ),
         ProofError,
     > {
@@ -256,12 +259,11 @@ impl<C: AffineRepr> InnerProductProof<C> {
             // and this check prevents overflow in 1<<lg_n below.
             return Err(ProofError::VerificationError);
         }
-
         if n != (1 << lg_n) {
             return Err(ProofError::VerificationError);
         }
 
-        transcript.innerproduct_domain_sep(n as u64);
+        <Transcript as TranscriptProtocol<G>>::innerproduct_domain_sep(transcript, n as u64);
 
         // 1. Recompute x_k,...,x_1 based on the proof transcript
 
@@ -269,23 +271,28 @@ impl<C: AffineRepr> InnerProductProof<C> {
         for (L, R) in self.L_vec.iter().zip(self.R_vec.iter()) {
             transcript.validate_and_append_point(b"L", L)?;
             transcript.validate_and_append_point(b"R", R)?;
-            challenges.push(transcript.challenge_scalar::<C>(b"u"));
+            challenges.push(<Transcript as TranscriptProtocol<G>>::challenge_scalar(
+                transcript, b"u",
+            ));
         }
 
         // 2. Compute 1/(u_k...u_1) and 1/u_k, ..., 1/u_1
 
         let mut challenges_inv = challenges.clone();
-        batch_inversion(&mut challenges_inv);
-        // allinv should be product of all inverses
-        let mut allinv: C::ScalarField = One::one();
+
+        batch_inversion::<G::ScalarField>(&mut challenges_inv);
+
+        let mut allinv = G::ScalarField::one();
+        for f in challenges_inv.iter().filter(|f| !f.is_zero()) {
+            allinv.mul_assign(f);
+        }
 
         // 3. Compute u_i^2 and (1/u_i)^2
 
         for i in 0..lg_n {
-            // update allinv
-            allinv *= challenges_inv[i];
-            challenges[i].square_in_place();
-            challenges_inv[i].square_in_place();
+            // XXX missing square fn upstream
+            challenges[i] = challenges[i] * challenges[i];
+            challenges_inv[i] = challenges_inv[i] * challenges_inv[i];
         }
         let challenges_sq = challenges;
         let challenges_inv_sq = challenges_inv;
@@ -317,16 +324,16 @@ impl<C: AffineRepr> InnerProductProof<C> {
         transcript: &mut Transcript,
         G_factors: IG,
         H_factors: IH,
-        P: &C,
-        Q: &C,
-        G: &[C],
-        H: &[C],
+        P: &G,
+        Q: &G,
+        G: &[G],
+        H: &[G],
     ) -> Result<(), ProofError>
     where
         IG: IntoIterator,
-        IG::Item: Borrow<C::ScalarField>,
+        IG::Item: Borrow<G::ScalarField>,
         IH: IntoIterator,
-        IH::Item: Borrow<C::ScalarField>,
+        IH::Item: Borrow<G::ScalarField>,
     {
         let (u_sq, u_inv_sq, s) = self.verification_scalars(n, transcript)?;
 
@@ -344,28 +351,30 @@ impl<C: AffineRepr> InnerProductProof<C> {
             .zip(inv_s)
             .map(|(h_i, s_i_inv)| (self.b * s_i_inv) * h_i.borrow());
 
-        let neg_u_sq = u_sq.iter().map(|ui| -(*ui));
-        let neg_u_inv_sq = u_inv_sq.iter().map(|ui| -(*ui));
+        let neg_u_sq = u_sq.iter().map(|ui| ui.neg());
+        let neg_u_inv_sq = u_inv_sq.iter().map(|ui| ui.neg());
 
-        let expect_P = C::Group::msm_unchecked(
-            iter::once(Q)
-                .chain(G.iter())
-                .chain(H.iter())
-                .chain(self.L_vec.iter())
-                .chain(self.R_vec.iter())
-                .copied()
-                .collect::<Vec<C>>()
-                .as_slice(),
-            iter::once(self.a * self.b)
-                .chain(g_times_a_times_s)
-                .chain(h_times_b_div_s)
-                .chain(neg_u_sq)
-                .chain(neg_u_inv_sq)
-                .collect::<Vec<C::ScalarField>>()
-                .as_slice(),
-        );
+        let Ls = &self.L_vec;
+        let Rs = &self.R_vec;
 
-        if expect_P.into() == *P {
+        let bases = iter::once(Q)
+            .chain(G.iter())
+            .chain(H.iter())
+            .chain(Ls.iter())
+            .chain(Rs.iter())
+            .map(|f| f.clone())
+            .collect::<Vec<G>>();
+
+        let scalars = iter::once(self.a * self.b)
+            .chain(g_times_a_times_s)
+            .chain(h_times_b_div_s)
+            .chain(neg_u_sq)
+            .chain(neg_u_inv_sq)
+            .collect::<Vec<G::ScalarField>>();
+
+        let expect_P = G::Group::msm(&bases, &scalars).unwrap().into_affine();
+
+        if expect_P == *P {
             Ok(())
         } else {
             Err(ProofError::VerificationError)
@@ -378,8 +387,8 @@ impl<C: AffineRepr> InnerProductProof<C> {
 ///    {\langle {\mathbf{a}}, {\mathbf{b}} \rangle} = \sum\_{i=0}^{n-1} a\_i \cdot b\_i.
 /// \\]
 /// Panics if the lengths of \\(\mathbf{a}\\) and \\(\mathbf{b}\\) are not equal.
-pub fn inner_product<S: Field>(a: &[S], b: &[S]) -> S {
-    let mut out = S::zero();
+pub fn inner_product<F: PrimeField>(a: &[F], b: &[F]) -> F {
+    let mut out = F::zero();
     if a.len() != b.len() {
         panic!("inner_product(a,b): lengths of vectors do not match");
     }
@@ -392,68 +401,82 @@ pub fn inner_product<S: Field>(a: &[S], b: &[S]) -> S {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use ark_secp256r1::Affine;
-    use ark_serialize::Compress;
-    use ark_std::UniformRand;
-
-    type F = <Affine as AffineRepr>::ScalarField;
+    use ark_std::{io::Cursor, rand::SeedableRng, One, UniformRand};
 
     use crate::util;
+    use digest::Digest;
+    use rand_chacha::ChaChaRng;
+    use sha3::Sha3_512;
 
     fn test_helper_create(n: usize) {
-        use ark_std::rand::{prelude::StdRng, Rng, SeedableRng};
-        let seed = [
-            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        let mut rng = StdRng::from_seed(seed);
+        type G = ark_secq256k1::Affine;
+
+        let mut rng = rand::thread_rng();
 
         use crate::generators::BulletproofGens;
-        let bp_gens = BulletproofGens::<Affine>::new(n, 1);
-        let G: Vec<_> = bp_gens.share(0).G(n).copied().collect();
-        let H: Vec<_> = bp_gens.share(0).H(n).copied().collect();
+        let bp_gens = BulletproofGens::<G>::new(n, 1);
+        let G_: Vec<G> = bp_gens.share(0).G(n).cloned().collect();
+        let H: Vec<G> = bp_gens.share(0).H(n).cloned().collect();
 
         // Q would be determined upstream in the protocol, so we pick a random one.
-        let Q = util::affine_from_bytes_tai::<Affine>(b"test point");
+        let Q = {
+            let mut hash = Sha3_512::new();
+            Digest::update(&mut hash, b"test point");
+            let h = hash.finalize();
+
+            let mut res = [0u8; 32];
+            res.copy_from_slice(&h[..32]);
+
+            let mut prng = ChaChaRng::from_seed(res);
+
+            G::rand(&mut prng)
+        };
 
         // a and b are the vectors for which we want to prove c = <a,b>
-        let a: Vec<_> = (0..n).map(|_| F::rand(&mut rng)).collect();
-        let b: Vec<_> = (0..n).map(|_| F::rand(&mut rng)).collect();
+        let a: Vec<_> = (0..n)
+            .map(|_| <G as AffineRepr>::ScalarField::rand(&mut rng))
+            .collect();
+        let b: Vec<_> = (0..n)
+            .map(|_| <G as AffineRepr>::ScalarField::rand(&mut rng))
+            .collect();
         let c = inner_product(&a, &b);
 
-        let G_factors: Vec<_> = iter::repeat(<Affine as AffineRepr>::ScalarField::one())
-            .take(n)
-            .collect();
+        let G_factors: Vec<<G as AffineRepr>::ScalarField> =
+            iter::repeat(<G as AffineRepr>::ScalarField::one())
+                .take(n)
+                .collect();
 
         // y_inv is (the inverse of) a random challenge
-        let y_inv: F = rng.gen();
-        let H_factors: Vec<F> = util::exp_iter(y_inv).take(n).collect();
+        let y_inv = <G as AffineRepr>::ScalarField::rand(&mut rng);
+        let H_factors: Vec<<G as AffineRepr>::ScalarField> =
+            util::exp_iter::<G>(y_inv).take(n).collect();
 
         // P would be determined upstream, but we need a correct P to check the proof.
         //
         // To generate P = <a,G> + <b,H'> + <a,b> Q, compute
         //             P = <a,G> + <b',H> + <a,b> Q,
         // where b' = b \circ y^(-n)
-        let b_prime = b.iter().zip(util::exp_iter(y_inv)).map(|(bi, yi)| *bi * yi);
-        // a.iter() has Item=&Scalar, need Item=Scalar to chain with b_prime
-        let a_prime = a.iter().copied();
+        let b_prime = b
+            .iter()
+            .zip(util::exp_iter::<G>(y_inv))
+            .map(|(bi, yi)| *bi * yi);
+        // a.iter() has Item=&Fr, need Item=Fr to chain with b_prime
+        let a_prime = a.iter().cloned();
 
-        let P = <Affine as AffineRepr>::Group::msm_unchecked(
-            G.iter()
-                .chain(H.iter())
-                .chain(iter::once(&Q))
-                .copied()
-                .collect::<Vec<_>>()
-                .as_slice(),
-            a_prime
-                .chain(b_prime)
-                .chain(iter::once(c))
-                .map(|s| s.into())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        )
-        .into();
+        let bases = G_
+            .iter()
+            .chain(H.iter())
+            .chain(iter::once(&Q))
+            .map(|f| f.clone())
+            .collect::<Vec<G>>();
+        let scalars = a_prime
+            .chain(b_prime)
+            .chain(iter::once(c))
+            .collect::<Vec<<G as AffineRepr>::ScalarField>>();
+
+        let P = <G as AffineRepr>::Group::msm(&bases, &scalars)
+            .unwrap()
+            .into_affine();
 
         let mut verifier = Transcript::new(b"innerproducttest");
         let proof = InnerProductProof::create(
@@ -461,7 +484,7 @@ mod tests {
             &Q,
             &G_factors,
             &H_factors,
-            G.clone(),
+            G_.clone(),
             H.clone(),
             a.clone(),
             b.clone(),
@@ -472,28 +495,33 @@ mod tests {
             .verify(
                 n,
                 &mut verifier,
-                iter::repeat(F::one()).take(n),
-                util::exp_iter(y_inv).take(n),
+                iter::repeat(<G as AffineRepr>::ScalarField::one()).take(n),
+                util::exp_iter::<G>(y_inv).take(n),
                 &P,
                 &Q,
-                &G,
+                &G_,
                 &H
             )
             .is_ok());
 
-        let mut buf = Vec::with_capacity(proof.serialized_size(Compress::Yes));
-        proof.serialize_compressed(&mut buf).unwrap();
-        let proof = InnerProductProof::deserialize_compressed(&buf[..]).unwrap();
+        let bytes = {
+            let mut cursor = Cursor::new(Vec::<u8>::new());
+            proof.serialize_compressed(&mut cursor).unwrap();
+            cursor.into_inner()
+        };
+        let mut cursor = Cursor::new(bytes);
+        let proof = InnerProductProof::deserialize_compressed(&mut cursor).unwrap();
+
         let mut verifier = Transcript::new(b"innerproducttest");
         assert!(proof
             .verify(
                 n,
                 &mut verifier,
-                iter::repeat(F::one()).take(n),
-                util::exp_iter(y_inv).take(n),
+                iter::repeat(<G as AffineRepr>::ScalarField::one()).take(n),
+                util::exp_iter::<G>(y_inv).take(n),
                 &P,
                 &Q,
-                &G,
+                &G_,
                 &H
             )
             .is_ok());
@@ -526,6 +554,8 @@ mod tests {
 
     #[test]
     fn test_inner_product() {
+        type F = ark_secp256k1::Fr;
+
         let a = vec![F::from(1u64), F::from(2u64), F::from(3u64), F::from(4u64)];
         let b = vec![F::from(2u64), F::from(3u64), F::from(4u64), F::from(5u64)];
         assert_eq!(F::from(40u64), inner_product(&a, &b));

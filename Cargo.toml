@@ -1,68 +1,117 @@
 [package]
-name = "bulletproofs"
-version = "2.0.0"
-authors = ["Cathie Yun <cathieyun@gmail.com>", 
+name = "ark-bulletproofs"
+version = "4.1.1"
+authors = ["Cathie Yun <cathieyun@gmail.com>",
            "Henry de Valence <hdevalence@hdevalence.ca>",
            "Oleg Andreev <oleganza@gmail.com>"]
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/dalek-cryptography/bulletproofs"
 categories = ["cryptography"]
-keywords = ["cryptography", "crypto", "ristretto", "zero-knowledge", "bulletproofs"]
-description = "A pure-Rust implementation of Bulletproofs using Ristretto"
-edition = "2018"
+keywords = ["cryptography", "crypto", "zero-knowledge", "bulletproofs"]
+description = "A pure-Rust implementation of Bulletproofs using secq256k1"
+edition = "2021"
 
 [dependencies]
-subtle = { version = "2", default-features = false }
-sha3 = { version = "0.9.1", default-features = false }
-digest = { version = "0.9.0", default-features = false }
-rand = { version = "0.8" }
+sha3 = { version = "0.10", default-features = false }
+digest = { version = "0.10", default-features = false }
+rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
+rand = { version = "0.8", optional = true }
 byteorder = { version = "1", default-features = false }
-thiserror = { version = "1", optional = true }
-merlin = { version = "2", default-features = false }
-ark-ec = { version = "0.4.0"}
-ark-ff = { version = "0.4.0"}
-ark-serialize = { version = "0.4.0" }
-ark-std = { version = "0.4.0" }
-rust-crypto = "^0.2"
-rayon = {version = "1.5.3", optional = true}
-zeroize = { version = "1", features = ["zeroize_derive"] }
+serde = { version = "1", default-features = false, features = ["alloc"] }
+serde_derive = { version = "1", default-features = false }
+merlin = { version = "3", default-features = false }
+clear_on_drop = { version = "0.2", features = ["no_cc"] }
+rand_chacha = "0.3"
+
+[dependencies.ark-ec]
+version = '0.4.0'
+default-features = false
+
+[dependencies.ark-ff]
+version = '0.4.0'
+default-features = false
+features = ['asm']
+
+[dependencies.ark-std]
+version = '0.4.0'
+default-features = false
+
+[dependencies.ark-serialize]
+version = '0.4.0'
+default-features = false
+features = ["derive"]
+
+[dependencies.ark-secp256k1]
+version =  '0.4.0'
+default-features = false
+
+[dependencies.ark-secq256k1]
+version =  '0.4.0'
+default-features = false
+
+[dependencies.ark-ed25519]
+version =  '0.4.0'
+default-features = false
 
 [dev-dependencies]
 criterion = "0.3"
-ark-algebra-test-templates = "0.3.0"
-ark-secp256r1 = { version = "0.4.0" }
-rand_chacha = "0.3.1"
-curve25519-dalek = "4.1.2"
-hex = "0.4.3"
-strobe-rs = { version = "0.8.1" }
+rand_chacha = "0.3"
+bincode = "1"
+
+[dev-dependencies.ark-algebra-test-templates]
+version = '0.4.0'
+default-features = false
+features = ["std"]
+
+[dev-dependencies.ark-curve25519]
+version =  '0.4.0'
+default-features = false
+features = ["std"]
 
 [features]
-default = ["std", "parallel", "asm"]
-std = ["thiserror"]
-asm = ["ark-ff/asm"]
-parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel", "rayon"]
-yoloproofs = ["std"]
+default = ["std", "yoloproofs"]
+yoloproofs = []
+std = ["rand"]
+parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-std/parallel"]
 
 [[test]]
-name = "range_proof"
-
-[[test]]
-name = "r1cs"
-
-[[bench]]
-name = "range_proof"
-harness = false
+name = "r1cs_secq256k1"
+required-features = ["yoloproofs"]
 
 [[bench]]
 name = "generators"
 harness = false
 
 [[bench]]
-name = "r1cs"
+name = "r1cs_secq256k1"
 harness = false
+required-features = ["yoloproofs"]
 
-[[bench]]
-name = "linear_proof"
-harness = false
+[profile.release]
+opt-level = 3
+lto = "thin"
+incremental = true
+panic = 'abort'
 
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = "thin"
+incremental = true
+debug-assertions = false
+
+[profile.dev]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true
+panic = 'abort'
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
+debug = true

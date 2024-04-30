@@ -1,46 +1,29 @@
 //! Errors related to proving and verifying proofs.
 
-extern crate alloc;
-use alloc::vec::Vec;
-
-#[cfg(feature = "std")]
-use thiserror::Error;
+use ark_serialize::SerializationError;
+use ark_std::{
+    fmt,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Represents an error in proof creation, verification, or parsing.
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Error))]
+#[derive(Clone, Eq, PartialEq)]
 pub enum ProofError {
     /// This error occurs when a proof failed to verify.
-    #[cfg_attr(feature = "std", error("Proof verification failed."))]
     VerificationError,
     /// This error occurs when the proof encoding is malformed.
-    #[cfg_attr(feature = "std", error("Proof data could not be parsed."))]
     FormatError,
     /// This error occurs during proving if the number of blinding
     /// factors does not match the number of values.
-    #[cfg_attr(feature = "std", error("Wrong number of blinding factors supplied."))]
     WrongNumBlindingFactors,
     /// This error occurs when attempting to create a proof with
     /// bitsize other than \\(8\\), \\(16\\), \\(32\\), or \\(64\\).
-    #[cfg_attr(feature = "std", error("Invalid bitsize, must have n = 8,16,32,64."))]
     InvalidBitsize,
     /// This error occurs when attempting to create an aggregated
     /// proof with non-power-of-two aggregation size.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid aggregation size, m must be a power of 2.")
-    )]
     InvalidAggregation,
-    /// This error occurs when attempting to create a proof
-    /// with mismatched vector argument lengths, or when
-    /// the lengths are not a power of two.
-    #[cfg_attr(feature = "std", error("Input vectors must all the the same length."))]
-    InvalidInputLength,
     /// This error occurs when there are insufficient generators for the proof.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid generators size, too few generators for proof")
-    )]
     InvalidGeneratorsLength,
     /// This error results from an internal error during proving.
     ///
@@ -48,8 +31,40 @@ pub enum ProofError {
     /// multiparty computation with ourselves.  However, because the
     /// MPC protocol is not exposed by the single-party API, we
     /// consider its errors to be internal errors.
-    #[cfg_attr(feature = "std", error("Internal error during proof creation: {0}"))]
     ProvingError(MPCError),
+    /// This error occurs if serialization fails
+    SerializationError(String),
+}
+
+impl fmt::Debug for ProofError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProofError::VerificationError => write!(f, "Proof verification failed."),
+            ProofError::FormatError => write!(f, "Proof data could not be parsed."),
+            ProofError::WrongNumBlindingFactors => {
+                write!(f, "Wrong number of blinding factors supplied.")
+            }
+            ProofError::InvalidBitsize => write!(f, "Invalid bitsize, must have n = 8,16,32,64."),
+            ProofError::InvalidAggregation => {
+                write!(f, "Invalid aggregation size, m must be a power of 2.")
+            }
+            ProofError::InvalidGeneratorsLength => {
+                write!(f, "Invalid generators size, too few generators for proof")
+            }
+            ProofError::ProvingError(e) => {
+                write!(f, "Internal error during proof creation: {:?}", e)
+            }
+            ProofError::SerializationError(e) => {
+                write!(f, "Serialization error: {}", e)
+            }
+        }
+    }
+}
+
+impl fmt::Display for ProofError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl From<MPCError> for ProofError {
@@ -70,88 +85,108 @@ impl From<MPCError> for ProofError {
 /// API: although the MPC protocol is used internally for single-party
 /// proving, its API should not expose the complexity of the MPC
 /// protocol.
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Error))]
+#[derive(Clone, Eq, PartialEq)]
 pub enum MPCError {
     /// This error occurs when the dealer gives a zero challenge,
     /// which would annihilate the blinding factors.
-    #[cfg_attr(feature = "std", error("Dealer gave a malicious challenge value."))]
     MaliciousDealer,
     /// This error occurs when attempting to create a proof with
     /// bitsize other than \\(8\\), \\(16\\), \\(32\\), or \\(64\\).
-    #[cfg_attr(feature = "std", error("Invalid bitsize, must have n = 8,16,32,64"))]
     InvalidBitsize,
     /// This error occurs when attempting to create an aggregated
     /// proof with non-power-of-two aggregation size.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid aggregation size, m must be a power of 2")
-    )]
     InvalidAggregation,
     /// This error occurs when there are insufficient generators for the proof.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid generators size, too few generators for proof")
-    )]
     InvalidGeneratorsLength,
     /// This error occurs when the dealer is given the wrong number of
     /// value commitments.
-    #[cfg_attr(feature = "std", error("Wrong number of value commitments"))]
     WrongNumBitCommitments,
     /// This error occurs when the dealer is given the wrong number of
     /// polynomial commitments.
-    #[cfg_attr(feature = "std", error("Wrong number of value commitments"))]
     WrongNumPolyCommitments,
     /// This error occurs when the dealer is given the wrong number of
     /// proof shares.
-    #[cfg_attr(feature = "std", error("Wrong number of proof shares"))]
     WrongNumProofShares,
     /// This error occurs when one or more parties submit malformed
     /// proof shares.
-    #[cfg_attr(
-        feature = "std",
-        error("Malformed proof shares from parties {bad_shares:?}")
-    )]
     MalformedProofShares {
         /// A vector with the indexes of the parties whose shares were malformed.
         bad_shares: Vec<usize>,
     },
 }
 
+impl fmt::Debug for MPCError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MPCError::MaliciousDealer => write!(f, "Dealer gave a malicious challenge value."),
+            MPCError::InvalidBitsize => write!(f, "Invalid bitsize, must have n = 8,16,32,64"),
+            MPCError::InvalidAggregation => {
+                write!(f, "Invalid aggregation size, m must be a power of 2")
+            }
+            MPCError::InvalidGeneratorsLength => {
+                write!(f, "Invalid generators size, too few generators for proof")
+            }
+            MPCError::WrongNumBitCommitments => write!(f, "Wrong number of value commitments"),
+            MPCError::WrongNumPolyCommitments => write!(f, "Wrong number of value commitments"),
+            MPCError::WrongNumProofShares => write!(f, "Wrong number of proof shares"),
+            MPCError::MalformedProofShares { bad_shares } => {
+                write!(f, "Malformed proof shares from parties {:?}", bad_shares)
+            }
+        }
+    }
+}
+
+impl fmt::Display for MPCError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// Represents an error during the proving or verifying of a constraint system.
 ///
 /// XXX: should this be separate from a `ProofError`?
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Error))]
+#[cfg(feature = "yoloproofs")]
+#[derive(Clone, Eq, PartialEq)]
 pub enum R1CSError {
     /// Occurs when there are insufficient generators for the proof.
-    #[cfg_attr(
-        feature = "std",
-        error("Invalid generators size, too few generators for proof")
-    )]
     InvalidGeneratorsLength,
     /// This error occurs when the proof encoding is malformed.
-    #[cfg_attr(feature = "std", error("Proof data could not be parsed."))]
     FormatError,
     /// Occurs when verification of an
     /// [`R1CSProof`](::r1cs::R1CSProof) fails.
-    #[cfg_attr(feature = "std", error("R1CSProof did not verify correctly."))]
     VerificationError,
-
     /// Occurs when trying to use a missing variable assignment.
     /// Used by gadgets that build the constraint system to signal that
     /// a variable assignment is not provided when the prover needs it.
-    #[cfg_attr(feature = "std", error("Variable does not have a value assignment."))]
     MissingAssignment,
-
     /// Occurs when a gadget receives an inconsistent input.
-    #[cfg_attr(feature = "std", error("Gadget error: {description:?}"))]
     GadgetError {
         /// The description of the reasons for the error.
         description: String,
     },
 }
 
+impl fmt::Debug for R1CSError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            R1CSError::InvalidGeneratorsLength => {
+                write!(f, "Invalid generators size, too few generators for proof")
+            }
+            R1CSError::FormatError => write!(f, "Proof data could not be parsed."),
+            R1CSError::VerificationError => write!(f, "R1CSProof did not verify correctly."),
+            R1CSError::MissingAssignment => write!(f, "Variable does not have a value assignment."),
+            R1CSError::GadgetError { description } => write!(f, "Gadget error: {}", description),
+        }
+    }
+}
+
+impl fmt::Display for R1CSError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(feature = "yoloproofs")]
 impl From<ProofError> for R1CSError {
     fn from(e: ProofError) -> R1CSError {
         match e {
@@ -160,5 +195,17 @@ impl From<ProofError> for R1CSError {
             ProofError::VerificationError => R1CSError::VerificationError,
             _ => panic!("unexpected error type in conversion"),
         }
+    }
+}
+
+impl From<ark_std::io::Error> for ProofError {
+    fn from(e: ark_std::io::Error) -> ProofError {
+        ProofError::SerializationError(e.to_string())
+    }
+}
+
+impl From<SerializationError> for ProofError {
+    fn from(_: ark_serialize::SerializationError) -> ProofError {
+        ProofError::FormatError
     }
 }
